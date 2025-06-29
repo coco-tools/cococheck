@@ -1,0 +1,106 @@
+use super::{Rule, RuleError};
+use crate::parser::ConventionalCommit;
+
+pub struct BodyLineLength {
+    pub max_length: usize,
+}
+
+impl Default for BodyLineLength {
+    fn default() -> Self {
+        BodyLineLength { max_length: 72 }
+    }
+}
+
+impl Rule for BodyLineLength {
+    fn name(&self) -> &str {
+        "BodyLineLength"
+    }
+
+    fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
+        let mut errors = Vec::new();
+        if let Some(body) = &commit.body {
+            for (i, line) in body.lines().enumerate() {
+                if line.len() > self.max_length {
+                    errors.push(RuleError {
+                        message: format!(
+                            "Body line {} exceeds maximum length of {} characters (actual: {}).",
+                            i + 1,
+                            self.max_length,
+                            line.len()
+                        ),
+                        span: Some(0..line.len()),
+                    });
+                }
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::parse_conventional_commit;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn succeeds_for_valid_body_length() {
+        let commit = parse_conventional_commit(
+            r#"
+            feat: add new feature
+
+            This is a valid body line.
+            This is another one.
+            "#
+            .trim(),
+        )
+        .unwrap();
+        let rule = BodyLineLength { max_length: 100 };
+        assert!(rule.check(&commit).is_ok());
+    }
+
+    #[test]
+    fn reports_all_body_lines_exceeding_max_length() {
+        let commit = parse_conventional_commit(
+            r#"
+            feat: add new feature
+
+            This is ok.
+            This line is way too long.
+            Also ok.
+            This line is also too long.
+            "#
+            .trim(),
+        )
+        .unwrap();
+        let rule = BodyLineLength { max_length: 12 };
+
+        let result = rule.check(&commit);
+
+        assert!(result.is_err());
+        if let Err(errors) = result {
+            assert_eq!(errors.len(), 2);
+            assert_eq!(
+                errors[0],
+                RuleError {
+                    message: "Body line 2 exceeds maximum length of 12 characters (actual: 26)."
+                        .to_string(),
+                    span: Some(0..26),
+                }
+            );
+            assert_eq!(
+                errors[1],
+                RuleError {
+                    message: "Body line 4 exceeds maximum length of 12 characters (actual: 27)."
+                        .to_string(),
+                    span: Some(0..27),
+                }
+            );
+        }
+    }
+}

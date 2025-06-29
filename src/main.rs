@@ -1,8 +1,10 @@
 mod parser;
+mod rules;
 
+use crate::parser::{ConventionalCommit, parse_conventional_commit};
+use crate::rules::Rule;
 use clap::Parser;
 use git2::Repository;
-use parser::parse_conventional_commit;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -13,9 +15,34 @@ struct Cli {
     input: PathBuf,
 }
 
+fn run_rules(commit: &ConventionalCommit) {
+    let rules: Vec<Box<dyn Rule>> = vec![
+        Box::new(rules::BodyLineLength::default()),
+        Box::new(rules::HeaderLength::default()),
+    ];
+
+    for rule in rules {
+        match rule.check(commit) {
+            Ok(_) => println!("Rule '{}' passed", rule.name()),
+            Err(errors) => {
+                eprintln!("Rule '{}' failed:", rule.name());
+                for e in errors {
+                    match e.span {
+                        Some(span) => {
+                            eprintln!("- {} (span: {}..{})", e.message, span.start, span.end)
+                        }
+                        None => eprintln!("- {}", e.message),
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn main() {
     let args = Cli::parse();
 
+    println!("Starting CoCoCheck...");
     println!("Analyzing Git repository at: {}", args.input.display());
 
     let repo = match Repository::open(&args.input) {
@@ -54,7 +81,10 @@ fn main() {
                 println!("Commit: {}", oid);
 
                 match parse_conventional_commit(message) {
-                    Ok(parsed) => println!("{:#?}", parsed),
+                    Ok(parsed) => {
+                        println!("{:#?}", parsed);
+                        run_rules(&parsed);
+                    }
                     Err(e) => eprintln!("Failed to parse commit message: {}", e),
                 }
             }
@@ -63,4 +93,6 @@ fn main() {
             }
         }
     }
+
+    println!("CoCoCheck finished.");
 }

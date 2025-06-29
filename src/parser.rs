@@ -3,6 +3,7 @@ use std::fmt;
 
 #[derive(Debug, PartialEq)]
 pub struct ConventionalCommit {
+    pub header: String,
     pub commit_type: String,
     pub scope: Option<String>,
     pub is_breaking_change: bool,
@@ -56,6 +57,7 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
         }
     } else {
         return Ok(ConventionalCommit {
+            header: header_line.to_string(),
             commit_type: caps["type"].to_string(),
             scope: caps.name("scope").map(|m| m.as_str().to_string()),
             is_breaking_change: caps.name("breaking").is_some(),
@@ -116,6 +118,7 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
         .collect();
 
     Ok(ConventionalCommit {
+        header: header_line.to_string(),
         commit_type: caps["type"].to_string(),
         scope: caps.name("scope").map(|m| m.as_str().to_string()),
         is_breaking_change: caps.name("breaking").is_some(),
@@ -145,6 +148,7 @@ mod tests {
     fn parses_header_without_scope() {
         let message = "feat: add new feature";
         let expected = ConventionalCommit {
+            header: "feat: add new feature".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
             is_breaking_change: false,
@@ -159,6 +163,7 @@ mod tests {
     fn parses_header_with_scope() {
         let message = "fix(core): correct minor issue";
         let expected = ConventionalCommit {
+            header: "fix(core): correct minor issue".to_string(),
             commit_type: "fix".to_string(),
             scope: Some("core".to_string()),
             is_breaking_change: false,
@@ -173,6 +178,7 @@ mod tests {
     fn parses_header_with_breaking_change() {
         let message = "feat!: introduce breaking change";
         let expected = ConventionalCommit {
+            header: "feat!: introduce breaking change".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
             is_breaking_change: true,
@@ -198,6 +204,7 @@ mod tests {
         "#
         .trim();
         let expected = ConventionalCommit {
+            header: "fix: resolve issue".to_string(),
             commit_type: "fix".to_string(),
             scope: None,
             is_breaking_change: false,
@@ -249,6 +256,7 @@ mod tests {
         .trim();
 
         let expected = ConventionalCommit {
+            header: "feat: add new feature".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
             is_breaking_change: false,
