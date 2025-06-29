@@ -1,5 +1,8 @@
+mod parser;
+
 use clap::Parser;
 use git2::Repository;
+use parser::parse_conventional_commit;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -36,7 +39,7 @@ fn main() {
         return;
     }
 
-    for (i, oid_result) in revwalk.enumerate().take(10) {
+    for (_, oid_result) in revwalk.enumerate().take(10) {
         match oid_result {
             Ok(oid) => {
                 let commit = match repo.find_commit(oid) {
@@ -46,8 +49,14 @@ fn main() {
                         continue;
                     }
                 };
-                let summary = commit.summary().unwrap_or("<no commit summary>");
-                println!("{:2}: {}", i + 1, summary);
+
+                let message = commit.message().unwrap_or("<no commit message>");
+                println!("Commit: {}", oid);
+
+                match parse_conventional_commit(message) {
+                    Ok(parsed) => println!("{:#?}", parsed),
+                    Err(e) => eprintln!("Failed to parse commit message: {}", e),
+                }
             }
             Err(e) => {
                 eprintln!("Error iterating commits: {}", e);
