@@ -6,7 +6,7 @@ use crate::config::{Config, load_config};
 use crate::parser::{ConventionalCommit, parse_conventional_commit};
 use crate::rules::Rule;
 use clap::Parser;
-use git2::Repository;
+use git2::{Commit, Oid, Repository, Sort};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -15,6 +15,49 @@ struct Cli {
     /// Path to the Git repository
     #[arg(short, long, default_value = ".")]
     input: PathBuf,
+
+    /// Start commit (inclusive, default: first commit)
+    #[arg(long)]
+    from: Option<String>,
+
+    /// End commit (inclusive, default: HEAD)
+    #[arg(long)]
+    to: Option<String>,
+}
+
+fn find_first_commit(repo: &Repository) -> Result<Oid, git2::Error> {
+    let mut revwalk = repo.revwalk()?;
+    revwalk.push_head()?;
+    revwalk.set_sorting(Sort::REVERSE)?;
+    revwalk
+        .next()
+        .transpose()?
+        .ok_or_else(|| git2::Error::from_str("No commits found"))
+}
+
+fn commits_between_inclusive(
+    repo: &Repository,
+    from: Oid,
+    to: Oid,
+) -> Result<Vec<Commit<'_>>, git2::Error> {
+    let from_commit = repo.find_commit(from)?;
+
+    let mut revwalk = repo.revwalk()?;
+    revwalk.push(to)?;
+
+    if let Some(parent_oid) = from_commit.parent_ids().next() {
+        revwalk.hide(parent_oid)?;
+    }
+
+    revwalk.set_sorting(Sort::TOPOLOGICAL | Sort::REVERSE)?;
+
+    let mut commits = Vec::new();
+    for oid in revwalk {
+        let commit = repo.find_commit(oid?)?;
+        commits.push(commit);
+    }
+
+    Ok(commits)
 }
 
 fn run_rules(commit: &ConventionalCommit, config: &Config) {
@@ -48,7 +91,7 @@ fn main() {
     let args = Cli::parse();
 
     println!("Starting CoCoCheck...");
-    println!("Analyzing Git repository at: {}", args.input.display());
+    println!("Checking Git repository at: {}", args.input.display());
 
     let config_path = args.input.join("cococheck.yml");
     let config = match load_config(config_path.to_str().unwrap()) {
@@ -80,46 +123,69 @@ fn main() {
         }
     };
 
-    let mut revwalk = match repo.revwalk() {
-        Ok(walk) => walk,
+    let to_oid = match &args.to {
+        Some(s) => match repo.revparse_single(s) {
+            Ok(obj) => obj.id(),
+            Err(e) => {
+                eprintln!(
+                    "The specified --to reference '{}' could not be found: {}",
+                    s,
+                    e.message()
+                );
+                std::process::exit(1);
+            }
+        },
+        None => repo.head().unwrap().target().unwrap(),
+    };
+    let from_oid = match &args.from {
+        Some(s) => match repo.revparse_single(s) {
+            Ok(obj) => obj.id(),
+            Err(e) => {
+                eprintln!(
+                    "The specified --from reference '{}' could not be found: {}",
+                    s,
+                    e.message()
+                );
+                std::process::exit(1);
+            }
+        },
+        None => find_first_commit(&repo).expect("No commits in repository"),
+    };
+
+    println!(
+        "Using commit range {}..{} ({}..{})",
+        args.from.as_deref().unwrap_or("<first commit>"),
+        args.to.as_deref().unwrap_or("HEAD"),
+        from_oid,
+        to_oid,
+    );
+
+    let commits = match commits_between_inclusive(&repo, from_oid, to_oid) {
+        Ok(commits) => {
+            if commits.is_empty() {
+                eprintln!("The specified commit range is empty (possibly --to is before --from).");
+                std::process::exit(1);
+            }
+            commits
+        }
         Err(e) => {
-            eprintln!("Error creating revwalk: {}", e);
+            eprintln!("Error collecting commits: {}", e);
             return;
         }
     };
 
-    if let Err(e) = revwalk.push_head() {
-        eprintln!("Error pushing head: {}", e);
-        return;
-    }
+    for commit in &commits {
+        let message = commit.message().unwrap_or("<no commit message>");
+        println!("Commit: {}", commit.id());
 
-    for (_, oid_result) in revwalk.enumerate().take(10) {
-        match oid_result {
-            Ok(oid) => {
-                let commit = match repo.find_commit(oid) {
-                    Ok(commit) => commit,
-                    Err(e) => {
-                        eprintln!("Error finding commit: {}", e);
-                        continue;
-                    }
-                };
-
-                let message = commit.message().unwrap_or("<no commit message>");
-                println!("Commit: {}", oid);
-
-                match parse_conventional_commit(message) {
-                    Ok(parsed) => {
-                        println!("{:#?}", parsed);
-                        run_rules(&parsed, &config);
-                    }
-                    Err(e) => eprintln!("Failed to parse commit message: {}", e),
-                }
+        match parse_conventional_commit(message) {
+            Ok(parsed) => {
+                println!("{:#?}", parsed);
+                run_rules(&parsed, &config);
             }
-            Err(e) => {
-                eprintln!("Error iterating commits: {}", e);
-            }
+            Err(e) => eprintln!("Failed to parse commit message: {}", e),
         }
     }
 
-    println!("CoCoCheck finished.");
+    println!("CoCoCheck finished checking {} commits.", commits.len());
 }
