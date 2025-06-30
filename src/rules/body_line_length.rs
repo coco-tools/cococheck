@@ -2,18 +2,26 @@ use super::{Rule, RuleError};
 use crate::parser::ConventionalCommit;
 
 pub struct BodyLineLength {
+    pub enabled: bool,
     pub max_length: usize,
 }
 
 impl Default for BodyLineLength {
     fn default() -> Self {
-        BodyLineLength { max_length: 72 }
+        BodyLineLength {
+            enabled: true,
+            max_length: 72,
+        }
     }
 }
 
 impl Rule for BodyLineLength {
     fn name(&self) -> &str {
         "BodyLineLength"
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.enabled
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
@@ -60,7 +68,10 @@ mod tests {
             .trim(),
         )
         .unwrap();
-        let rule = BodyLineLength { max_length: 100 };
+        let rule = BodyLineLength {
+            max_length: 100,
+            ..Default::default()
+        };
         assert!(rule.check(&commit).is_ok());
     }
 
@@ -78,7 +89,10 @@ mod tests {
             .trim(),
         )
         .unwrap();
-        let rule = BodyLineLength { max_length: 12 };
+        let rule = BodyLineLength {
+            max_length: 12,
+            ..Default::default()
+        };
 
         let result = rule.check(&commit);
 

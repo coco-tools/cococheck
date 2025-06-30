@@ -2,18 +2,26 @@ use super::{Rule, RuleError};
 use crate::parser::ConventionalCommit;
 
 pub struct HeaderLength {
+    pub enabled: bool,
     pub max_length: usize,
 }
 
 impl Default for HeaderLength {
     fn default() -> Self {
-        HeaderLength { max_length: 72 }
+        HeaderLength {
+            enabled: true,
+            max_length: 72,
+        }
     }
 }
 
 impl Rule for HeaderLength {
     fn name(&self) -> &str {
         "HeaderLength"
+    }
+
+    fn is_enabled(&self) -> bool {
+        self.enabled
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
@@ -40,7 +48,10 @@ mod tests {
     #[test]
     fn succeeds_for_valid_length() {
         let commit = parse_conventional_commit("feat: add new feature").unwrap();
-        let rule = HeaderLength { max_length: 50 };
+        let rule = HeaderLength {
+            max_length: 50,
+            ..Default::default()
+        };
         assert!(rule.check(&commit).is_ok());
     }
 
@@ -50,7 +61,10 @@ mod tests {
             "feat: this is a very long header that exceeds the maximum length",
         )
         .unwrap();
-        let rule = HeaderLength { max_length: 30 };
+        let rule = HeaderLength {
+            max_length: 30,
+            ..Default::default()
+        };
         assert!(rule.check(&long_commit).is_err());
     }
 }

@@ -17,9 +17,12 @@ struct Cli {
 
 fn run_rules(commit: &ConventionalCommit) {
     let rules: Vec<Box<dyn Rule>> = vec![
-        Box::new(rules::BodyLineLength::default()),
-        Box::new(rules::HeaderLength::default()),
-    ];
+        Box::new(rules::BodyLineLength::default()) as Box<dyn Rule>,
+        Box::new(rules::HeaderLength::default()) as Box<dyn Rule>,
+    ]
+    .into_iter()
+    .filter(|rule| rule.is_enabled())
+    .collect();
 
     for rule in rules {
         match rule.check(commit) {
