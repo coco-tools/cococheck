@@ -1,6 +1,8 @@
+mod config;
 mod parser;
 mod rules;
 
+use crate::config::{Config, load_config};
 use crate::parser::{ConventionalCommit, parse_conventional_commit};
 use crate::rules::Rule;
 use clap::Parser;
@@ -15,10 +17,10 @@ struct Cli {
     input: PathBuf,
 }
 
-fn run_rules(commit: &ConventionalCommit) {
+fn run_rules(commit: &ConventionalCommit, config: &Config) {
     let rules: Vec<Box<dyn Rule>> = vec![
-        Box::new(rules::BodyLineLength::default()) as Box<dyn Rule>,
-        Box::new(rules::HeaderLength::default()) as Box<dyn Rule>,
+        Box::new(config.rules.body_line_length.clone()) as Box<dyn Rule>,
+        Box::new(config.rules.header_length.clone()) as Box<dyn Rule>,
     ]
     .into_iter()
     .filter(|rule| rule.is_enabled())
@@ -47,6 +49,28 @@ fn main() {
 
     println!("Starting CoCoCheck...");
     println!("Analyzing Git repository at: {}", args.input.display());
+
+    let config_path = args.input.join("cococheck.yml");
+    let config = match load_config(config_path.to_str().unwrap()) {
+        Ok(cfg) => {
+            println!(
+                "Using config file: {}",
+                config_path
+                    .strip_prefix(&args.input)
+                    .unwrap_or(&config_path)
+                    .display()
+            );
+            cfg
+        }
+        Err(config::ConfigError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound => {
+            println!("No config file found, using default configuration.");
+            Config::default()
+        }
+        Err(e) => {
+            eprintln!("Error loading config: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     let repo = match Repository::open(&args.input) {
         Ok(repo) => repo,
@@ -86,7 +110,7 @@ fn main() {
                 match parse_conventional_commit(message) {
                     Ok(parsed) => {
                         println!("{:#?}", parsed);
-                        run_rules(&parsed);
+                        run_rules(&parsed, &config);
                     }
                     Err(e) => eprintln!("Failed to parse commit message: {}", e),
                 }

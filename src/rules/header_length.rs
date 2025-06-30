@@ -1,16 +1,30 @@
 use super::{Rule, RuleError};
 use crate::parser::ConventionalCommit;
+use serde::Deserialize;
 
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct HeaderLength {
+    #[serde(default = "HeaderLength::default_enabled")]
     pub enabled: bool,
+    #[serde(default = "HeaderLength::default_max_length")]
     pub max_length: usize,
+}
+
+impl HeaderLength {
+    fn default_enabled() -> bool {
+        true
+    }
+
+    fn default_max_length() -> usize {
+        72
+    }
 }
 
 impl Default for HeaderLength {
     fn default() -> Self {
         HeaderLength {
-            enabled: true,
-            max_length: 72,
+            enabled: Self::default_enabled(),
+            max_length: Self::default_max_length(),
         }
     }
 }
