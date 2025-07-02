@@ -7,6 +7,8 @@ use crate::parser::{ConventionalCommit, parse_conventional_commit};
 use crate::rules::Rule;
 use clap::Parser;
 use git2::{Commit, Oid, Repository, Sort};
+use log::{debug, error, info, warn};
+use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -23,6 +25,14 @@ struct Cli {
     /// End commit (inclusive, default: HEAD)
     #[arg(long)]
     to: Option<String>,
+
+    /// Enable info logging
+    #[arg(long)]
+    info: bool,
+
+    /// Enable debug logging
+    #[arg(long)]
+    debug: bool,
 }
 
 fn find_first_commit(repo: &Repository) -> Result<Oid, git2::Error> {
@@ -71,15 +81,15 @@ fn run_rules(commit: &ConventionalCommit, config: &Config) {
 
     for rule in rules {
         match rule.check(commit) {
-            Ok(_) => println!("Rule '{}' passed", rule.name()),
+            Ok(_) => info!("Rule '{}' passed", rule.name()),
             Err(errors) => {
-                eprintln!("Rule '{}' failed:", rule.name());
+                warn!("Rule '{}' failed:", rule.name());
                 for e in errors {
                     match e.span {
                         Some(span) => {
-                            eprintln!("- {} (span: {}..{})", e.message, span.start, span.end)
+                            warn!("- {} (span: {}..{})", e.message, span.start, span.end)
                         }
-                        None => eprintln!("- {}", e.message),
+                        None => warn!("- {}", e.message),
                     }
                 }
             }
@@ -90,13 +100,31 @@ fn run_rules(commit: &ConventionalCommit, config: &Config) {
 fn main() {
     let args = Cli::parse();
 
-    println!("Starting CoCoCheck...");
-    println!("Checking Git repository at: {}", args.input.display());
+    if args.debug {
+        unsafe {
+            std::env::set_var("RUST_LOG", "debug");
+        }
+    } else if args.info {
+        unsafe {
+            std::env::set_var("RUST_LOG", "info");
+        }
+    } else {
+        unsafe {
+            std::env::set_var("RUST_LOG", "warn");
+        }
+    }
+
+    env_logger::Builder::from_default_env()
+        .format(|_, record| writeln!(std::io::stdout(), "{}", record.args()))
+        .init();
+
+    info!("Starting CoCoCheck...");
+    info!("Checking Git repository at: {}", args.input.display());
 
     let config_path = args.input.join("cococheck.yml");
     let config = match load_config(config_path.to_str().unwrap()) {
         Ok(cfg) => {
-            println!(
+            info!(
                 "Using config file: {}",
                 config_path
                     .strip_prefix(&args.input)
@@ -106,11 +134,11 @@ fn main() {
             cfg
         }
         Err(config::ConfigError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound => {
-            println!("No config file found, using default configuration.");
+            info!("No config file found, using default configuration.");
             Config::default()
         }
         Err(e) => {
-            eprintln!("Error loading config: {}", e);
+            error!("Error loading config: {}", e);
             std::process::exit(1);
         }
     };
@@ -118,7 +146,7 @@ fn main() {
     let repo = match Repository::open(&args.input) {
         Ok(repo) => repo,
         Err(e) => {
-            eprintln!("Error opening repository: {}", e);
+            error!("Error opening repository: {}", e);
             return;
         }
     };
@@ -127,7 +155,7 @@ fn main() {
         Some(s) => match repo.revparse_single(s) {
             Ok(obj) => obj.id(),
             Err(e) => {
-                eprintln!(
+                error!(
                     "The specified --to reference '{}' could not be found: {}",
                     s,
                     e.message()
@@ -141,7 +169,7 @@ fn main() {
         Some(s) => match repo.revparse_single(s) {
             Ok(obj) => obj.id(),
             Err(e) => {
-                eprintln!(
+                error!(
                     "The specified --from reference '{}' could not be found: {}",
                     s,
                     e.message()
@@ -152,7 +180,7 @@ fn main() {
         None => find_first_commit(&repo).expect("No commits in repository"),
     };
 
-    println!(
+    info!(
         "Using commit range {}..{} ({}..{})",
         args.from.as_deref().unwrap_or("<first commit>"),
         args.to.as_deref().unwrap_or("HEAD"),
@@ -163,29 +191,30 @@ fn main() {
     let commits = match commits_between_inclusive(&repo, from_oid, to_oid) {
         Ok(commits) => {
             if commits.is_empty() {
-                eprintln!("The specified commit range is empty (possibly --to is before --from).");
+                error!("The specified commit range is empty (possibly --to is before --from).");
                 std::process::exit(1);
             }
             commits
         }
         Err(e) => {
-            eprintln!("Error collecting commits: {}", e);
+            error!("Error collecting commits: {}", e);
             return;
         }
     };
 
     for commit in &commits {
         let message = commit.message().unwrap_or("<no commit message>");
-        println!("Commit: {}", commit.id());
+        info!("Commit: {}", commit.summary().unwrap_or("<no summary>"));
+        debug!("ref: {}", commit.id());
 
         match parse_conventional_commit(message) {
             Ok(parsed) => {
-                println!("{:#?}", parsed);
+                debug!("{:#?}", parsed);
                 run_rules(&parsed, &config);
             }
-            Err(e) => eprintln!("Failed to parse commit message: {}", e),
+            Err(e) => warn!("Failed to parse commit message: {}", e),
         }
     }
 
-    println!("CoCoCheck finished checking {} commits.", commits.len());
+    info!("CoCoCheck finished checking {} commits.", commits.len());
 }
