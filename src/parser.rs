@@ -75,7 +75,7 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
 
     for line in lines {
         let line = line.trim();
-        if !footer_started && last_line_empty && is_footer_line(line) {
+        if !footer_started && last_line_empty && parse_footer_line(line).is_some() {
             footer_started = true;
         }
 
@@ -104,19 +104,19 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
     let mut current_value: Option<String> = None;
 
     for line in footer_lines {
-        let parts: Vec<&str> = line.splitn(2, ':').map(str::trim).collect();
-
-        if parts.len() == 2 {
+        if let Some((token, value)) = parse_footer_line(&line) {
             if let (Some(token), Some(value)) = (current_token.take(), current_value.take()) {
                 footers.push(Footer { token, value });
             }
 
-            current_token = Some(parts[0].to_string());
-            current_value = Some(parts[1].to_string());
-
-            if parts[0].eq_ignore_ascii_case("BREAKING CHANGE") {
+            if token.eq_ignore_ascii_case("BREAKING CHANGE")
+                || token.eq_ignore_ascii_case("BREAKING-CHANGE")
+            {
                 breaking_change_footer_found = true;
             }
+
+            current_token = Some(token);
+            current_value = Some(value);
         } else {
             if let Some(ref mut s) = current_value {
                 s.push('\n');
@@ -140,15 +140,21 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
     })
 }
 
-fn is_footer_line(line: &str) -> bool {
-    if let Some(idx) = line.find(':') {
-        let (token, _) = line.split_at(idx);
-        !token.is_empty()
-            && (token.eq_ignore_ascii_case("BREAKING CHANGE")
-                || !token.contains(char::is_whitespace))
-    } else {
-        false
-    }
+pub fn parse_footer_line(line: &str) -> Option<(String, String)> {
+    let re = Regex::new(r"^(?P<token>BREAKING CHANGE|[\p{L}\p{N}-]+)(?P<sep>: | #)(?P<value>.+)$")
+        .unwrap();
+
+    re.captures(line).map(|caps| {
+        let token = caps.name("token").unwrap().as_str().to_string();
+        let sep = caps.name("sep").unwrap().as_str();
+        let value = caps.name("value").unwrap().as_str();
+        let value = if sep == " #" {
+            format!("#{}", value)
+        } else {
+            value.to_string()
+        };
+        (token, value)
+    })
 }
 
 #[cfg(test)]
@@ -213,6 +219,7 @@ mod tests {
 
         BREAKING CHANGE: major update
         Signed-off-by: John Doe <john.doe@example.org>
+        Fixes #123
         "#
         .trim();
         let expected = ConventionalCommit {
@@ -228,6 +235,9 @@ mod tests {
             }, Footer {
                 token: "Signed-off-by".to_string(),
                 value: "John Doe <john.doe@example.org>".to_string()
+            }, Footer {
+                token: "Fixes".to_string(),
+                value: "#123".to_string()
             }],
         };
         assert_eq!(parse_conventional_commit(message).unwrap(), expected);
@@ -263,6 +273,41 @@ mod tests {
             }],
         };
         assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+    }
+
+    #[test]
+    fn detects_breaking_change_in_footer() {
+        let message = r#"
+        feat: add new feature
+
+        This is the body.
+
+        BREAKING CHANGE: major update
+        "#
+        .trim();
+
+        assert_eq!(
+            parse_conventional_commit(message)
+                .unwrap()
+                .is_breaking_change,
+            true
+        );
+
+        let message = r#"
+        feat: add new feature
+
+        This is the body.
+
+        BREAKING-CHANGE: major update
+        "#
+        .trim();
+
+        assert_eq!(
+            parse_conventional_commit(message)
+                .unwrap()
+                .is_breaking_change,
+            true
+        );
     }
 
     #[test]
