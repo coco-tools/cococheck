@@ -98,33 +98,45 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
         Some(body_lines.join("\n"))
     };
 
-    let footer = footer_lines
-        .into_iter()
-        .filter_map(|line| {
-            let parts: Vec<&str> = line.splitn(2, ':').map(str::trim).collect();
-            if parts.len() == 2 {
-                let token = parts[0].to_string();
-                if token.eq_ignore_ascii_case("BREAKING CHANGE") {
-                    breaking_change_footer_found = true;
-                }
-                Some(Footer {
-                    token,
-                    value: parts[1].to_string(),
-                })
-            } else {
-                None
+    let mut footers = Vec::new();
+
+    let mut current_token: Option<String> = None;
+    let mut current_value: Option<String> = None;
+
+    for line in footer_lines {
+        let parts: Vec<&str> = line.splitn(2, ':').map(str::trim).collect();
+
+        if parts.len() == 2 {
+            if let (Some(token), Some(value)) = (current_token.take(), current_value.take()) {
+                footers.push(Footer { token, value });
             }
-        })
-        .collect();
+
+            current_token = Some(parts[0].to_string());
+            current_value = Some(parts[1].to_string());
+
+            if parts[0].eq_ignore_ascii_case("BREAKING CHANGE") {
+                breaking_change_footer_found = true;
+            }
+        } else {
+            if let Some(ref mut s) = current_value {
+                s.push('\n');
+                s.push_str(&line);
+            }
+        }
+    }
+
+    if let (Some(token), Some(value)) = (current_token.take(), current_value.take()) {
+        footers.push(Footer { token, value });
+    }
 
     Ok(ConventionalCommit {
         header: header_line.to_string(),
         commit_type: caps["type"].to_string(),
         scope: caps.name("scope").map(|m| m.as_str().to_string()),
-        is_breaking_change: caps.name("breaking").is_some(),
+        is_breaking_change: breaking_change_footer_found || caps.name("breaking").is_some(),
         description: caps["desc"].to_string(),
         body,
-        footer,
+        footer: footers,
     })
 }
 
@@ -207,12 +219,44 @@ mod tests {
             header: "fix: resolve issue".to_string(),
             commit_type: "fix".to_string(),
             scope: None,
-            is_breaking_change: false,
+            is_breaking_change: true,
             description: "resolve issue".to_string(),
             body: Some("This is the body of the commit.\nThis is the second line of the body.\n\nThis is the third line of the body.".to_string()),
             footer: vec![Footer {
                 token: "BREAKING CHANGE".to_string(),
                 value: "major update".to_string(),
+            }, Footer {
+                token: "Signed-off-by".to_string(),
+                value: "John Doe <john.doe@example.org>".to_string()
+            }],
+        };
+        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+    }
+
+    #[test]
+    fn parses_footers_with_multiple_lines() {
+        let message = r#"
+        feat: add new feature
+
+        This is the body.
+
+        BREAKING CHANGE: This is a long breaking change description
+        that spans multiple lines and provides detailed information
+        about the change.
+        Signed-off-by: John Doe <john.doe@example.org>
+        "#
+        .trim();
+
+        let expected = ConventionalCommit {
+            header: "feat: add new feature".to_string(),
+            commit_type: "feat".to_string(),
+            scope: None,
+            is_breaking_change: true,
+            description: "add new feature".to_string(),
+            body: Some("This is the body.".to_string()),
+            footer: vec![Footer {
+                token: "BREAKING CHANGE".to_string(),
+                value: "This is a long breaking change description\nthat spans multiple lines and provides detailed information\nabout the change.".to_string(),
             }, Footer {
                 token: "Signed-off-by".to_string(),
                 value: "John Doe <john.doe@example.org>".to_string()
