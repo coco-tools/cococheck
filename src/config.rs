@@ -1,4 +1,4 @@
-use crate::rules::{BodyLineLength, HeaderLength};
+use crate::rules::{AllowedTypes, BodyLineLength, HeaderLength};
 use serde::Deserialize;
 use std::fmt;
 
@@ -12,6 +12,9 @@ pub struct Config {
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleSet {
+    #[serde(default)]
+    pub allowed_types: AllowedTypes,
+
     #[serde(default)]
     pub body_line_length: BodyLineLength,
 
@@ -51,6 +54,7 @@ mod tests {
     #[test]
     fn read_default_config_for_empty_config() {
         let config = parse_config("").unwrap();
+        assert_eq!(config.rules.allowed_types, AllowedTypes::default());
         assert_eq!(config.rules.body_line_length, BodyLineLength::default());
         assert_eq!(config.rules.header_length, HeaderLength::default());
     }
@@ -61,6 +65,7 @@ mod tests {
         rules: {}
         "#;
         let config = parse_config(yaml).unwrap();
+        assert_eq!(config.rules.allowed_types, AllowedTypes::default());
         assert_eq!(config.rules.body_line_length, BodyLineLength::default());
         assert_eq!(config.rules.header_length, HeaderLength::default());
     }
