@@ -214,7 +214,10 @@ fn main() {
                     }
                 }
             }
-            Err(e) => warn!("Failed to parse commit message: {}", e),
+            Err(e) => {
+                failed_commits += 1;
+                warn!("Failed to parse commit message: {}", e)
+            }
         }
     }
 

@@ -42,9 +42,10 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
     let caps = match header_regex.captures(header_line) {
         Some(caps) => caps,
         None => {
-            return Err(ParseError::InvalidFormat(
-                "Cannot parse header line".to_string(),
-            ));
+            return Err(ParseError::InvalidFormat(format!(
+                "Cannot parse header line: '{}'",
+                header_line
+            )));
         }
     };
 
@@ -384,7 +385,10 @@ mod tests {
         let result = parse_conventional_commit(message);
         match result {
             Err(ParseError::InvalidFormat(msg)) => {
-                assert_eq!(msg, "Cannot parse header line");
+                assert_eq!(
+                    msg,
+                    "Cannot parse header line: 'invalid commit message format'"
+                );
             }
             _ => panic!("Expected an InvalidFormat error"),
         }
