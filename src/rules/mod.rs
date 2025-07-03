@@ -15,6 +15,9 @@ pub trait Rule {
 mod rule_set;
 pub use rule_set::RuleSet;
 
+mod allowed_types;
+pub use allowed_types::AllowedTypes;
+
 mod body_line_length;
 pub use body_line_length::BodyLineLength;
 
