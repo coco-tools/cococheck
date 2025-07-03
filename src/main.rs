@@ -221,10 +221,18 @@ fn main() {
         }
     }
 
-    warn!("CoCoCheck finished checking {} commits.", commits.len());
+    warn!(
+        "CoCoCheck finished checking {} commit{}.",
+        commits.len(),
+        if commits.len() == 1 { "" } else { "s" }
+    );
 
     if failed_commits > 0 {
-        error!("{} commits failed the checks.", failed_commits);
+        error!(
+            "{} commit{} failed the checks.",
+            failed_commits,
+            if failed_commits == 1 { "" } else { "s" }
+        );
         std::process::exit(1);
     }
 }
