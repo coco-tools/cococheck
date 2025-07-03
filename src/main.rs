@@ -3,8 +3,8 @@ mod parser;
 mod rules;
 
 use crate::config::{Config, load_config};
-use crate::parser::{ConventionalCommit, parse_conventional_commit};
-use crate::rules::{Rule, RuleError};
+use crate::parser::parse_conventional_commit;
+use crate::rules::RuleSet;
 use clap::Parser;
 use git2::{Commit, Oid, Repository, Sort};
 use log::{debug, error, info, warn};
@@ -68,27 +68,6 @@ fn commits_between_inclusive(
     }
 
     Ok(commits)
-}
-
-fn run_rules(commit: &ConventionalCommit, config: &Config) -> Vec<(String, Vec<RuleError>)> {
-    let rules: Vec<Box<dyn Rule>> = vec![
-        Box::new(config.rules.body_line_length.clone()) as Box<dyn Rule>,
-        Box::new(config.rules.header_length.clone()) as Box<dyn Rule>,
-    ]
-    .into_iter()
-    .filter(|rule| rule.is_enabled())
-    .collect();
-
-    let mut all_errors = Vec::new();
-
-    for rule in rules {
-        match rule.check(commit) {
-            Ok(_) => all_errors.push((rule.name().to_string(), vec![])),
-            Err(errors) => all_errors.push((rule.name().to_string(), errors)),
-        }
-    }
-
-    all_errors
 }
 
 fn main() {
@@ -196,6 +175,7 @@ fn main() {
         }
     };
 
+    let rule_set = RuleSet::new(&config);
     let mut failed_commits = 0;
 
     for commit in &commits {
@@ -203,7 +183,7 @@ fn main() {
 
         match parse_conventional_commit(message) {
             Ok(parsed) => {
-                let rule_errors = run_rules(&parsed, &config);
+                let rule_errors = rule_set.check_commit(&parsed);
                 let failed = rule_errors.iter().any(|(_, errors)| !errors.is_empty());
 
                 if failed {

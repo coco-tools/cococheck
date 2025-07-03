@@ -12,8 +12,11 @@ pub trait Rule {
     fn check(&self, message: &ConventionalCommit) -> Result<(), Vec<RuleError>>;
 }
 
-mod body_line_length;
-mod header_length;
+mod rule_set;
+pub use rule_set::RuleSet;
 
+mod body_line_length;
 pub use body_line_length::BodyLineLength;
+
+mod header_length;
 pub use header_length::HeaderLength;
