@@ -141,10 +141,12 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
 }
 
 pub fn parse_footer_line(line: &str) -> Option<(String, String)> {
-    let re = Regex::new(r"^(?P<token>BREAKING CHANGE|[\p{L}\p{N}-]+)(?P<sep>: | #)(?P<value>.+)$")
-        .unwrap();
+    let footer_regex = Regex::new(
+        r"^(?P<token>BREAKING CHANGE|\[[^]]+]|[\p{L}\p{N}-]+)(?P<sep>: | #)(?P<value>.+)$",
+    )
+    .unwrap();
 
-    re.captures(line).map(|caps| {
+    footer_regex.captures(line).map(|caps| {
         let token = caps.name("token").unwrap().as_str().to_string();
         let sep = caps.name("sep").unwrap().as_str();
         let value = caps.name("value").unwrap().as_str();
@@ -271,6 +273,72 @@ mod tests {
                 token: "Signed-off-by".to_string(),
                 value: "John Doe <john.doe@example.org>".to_string()
             }],
+        };
+        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+    }
+
+    #[test]
+    fn parses_footers_with_links() {
+        let message = r#"
+        feat: add new feature
+
+        This [1] is the body [2].
+
+        [1]: https://example.org/issue/123
+        [2]: https://example.org/issue/456
+        "#
+        .trim();
+
+        let expected = ConventionalCommit {
+            header: "feat: add new feature".to_string(),
+            commit_type: "feat".to_string(),
+            scope: None,
+            is_breaking_change: false,
+            description: "add new feature".to_string(),
+            body: Some("This [1] is the body [2].".to_string()),
+            footer: vec![
+                Footer {
+                    token: "[1]".to_string(),
+                    value: "https://example.org/issue/123".to_string(),
+                },
+                Footer {
+                    token: "[2]".to_string(),
+                    value: "https://example.org/issue/456".to_string(),
+                },
+            ],
+        };
+        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+    }
+
+    #[test]
+    fn parses_footers_with_footnotes() {
+        let message = r#"
+        feat: add new feature
+
+        This[^1] is the body[^2].
+
+        [^1]: https://example.org/issue/123
+        [^2]: https://example.org/issue/456
+        "#
+        .trim();
+
+        let expected = ConventionalCommit {
+            header: "feat: add new feature".to_string(),
+            commit_type: "feat".to_string(),
+            scope: None,
+            is_breaking_change: false,
+            description: "add new feature".to_string(),
+            body: Some("This[^1] is the body[^2].".to_string()),
+            footer: vec![
+                Footer {
+                    token: "[^1]".to_string(),
+                    value: "https://example.org/issue/123".to_string(),
+                },
+                Footer {
+                    token: "[^2]".to_string(),
+                    value: "https://example.org/issue/456".to_string(),
+                },
+            ],
         };
         assert_eq!(parse_conventional_commit(message).unwrap(), expected);
     }
