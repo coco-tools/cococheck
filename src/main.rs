@@ -4,7 +4,7 @@ mod rules;
 
 use crate::config::{Config, load_config};
 use crate::parser::{ConventionalCommit, parse_conventional_commit};
-use crate::rules::Rule;
+use crate::rules::{Rule, RuleError};
 use clap::Parser;
 use git2::{Commit, Oid, Repository, Sort};
 use log::{debug, error, info, warn};
@@ -70,7 +70,7 @@ fn commits_between_inclusive(
     Ok(commits)
 }
 
-fn run_rules(commit: &ConventionalCommit, config: &Config) {
+fn run_rules(commit: &ConventionalCommit, config: &Config) -> Vec<(String, Vec<RuleError>)> {
     let rules: Vec<Box<dyn Rule>> = vec![
         Box::new(config.rules.body_line_length.clone()) as Box<dyn Rule>,
         Box::new(config.rules.header_length.clone()) as Box<dyn Rule>,
@@ -79,22 +79,16 @@ fn run_rules(commit: &ConventionalCommit, config: &Config) {
     .filter(|rule| rule.is_enabled())
     .collect();
 
+    let mut all_errors = Vec::new();
+
     for rule in rules {
         match rule.check(commit) {
-            Ok(_) => info!("Rule '{}' passed", rule.name()),
-            Err(errors) => {
-                warn!("Rule '{}' failed:", rule.name());
-                for e in errors {
-                    match e.span {
-                        Some(span) => {
-                            warn!("- {} (span: {}..{})", e.message, span.start, span.end)
-                        }
-                        None => warn!("- {}", e.message),
-                    }
-                }
-            }
+            Ok(_) => all_errors.push((rule.name().to_string(), vec![])),
+            Err(errors) => all_errors.push((rule.name().to_string(), errors)),
         }
     }
+
+    all_errors
 }
 
 fn main() {
@@ -118,7 +112,7 @@ fn main() {
         .format(|_, record| writeln!(std::io::stdout(), "{}", record.args()))
         .init();
 
-    info!("Starting CoCoCheck...");
+    warn!("Starting CoCoCheck...");
     info!("Checking Git repository at: {}", args.input.display());
 
     let config_path = args.input.join("cococheck.yml");
@@ -202,19 +196,52 @@ fn main() {
         }
     };
 
+    let mut failed_commits = 0;
+
     for commit in &commits {
         let message = commit.message().unwrap_or("<no commit message>");
-        info!("Commit: {}", commit.summary().unwrap_or("<no summary>"));
-        debug!("ref: {}", commit.id());
 
         match parse_conventional_commit(message) {
             Ok(parsed) => {
+                let rule_errors = run_rules(&parsed, &config);
+                let failed = rule_errors.iter().any(|(_, errors)| !errors.is_empty());
+
+                if failed {
+                    failed_commits += 1;
+                    warn!("Commit {} failed:", commit.id());
+                    warn!("\n--- MESSAGE ---");
+                    warn!("Message: {}", message);
+                    warn!("--- END MESSAGE ---\n");
+                } else {
+                    info!("Commit {} passed.", commit.id());
+                }
+
                 debug!("{:#?}", parsed);
-                run_rules(&parsed, &config);
+
+                for (rule_name, errors) in &rule_errors {
+                    if errors.is_empty() {
+                        debug!("  Rule '{}' passed", rule_name);
+                    } else {
+                        warn!("  Rule '{}' failed:", rule_name);
+                        for e in errors {
+                            match &e.span {
+                                Some(span) => {
+                                    warn!("  - {} (span: {}..{})", e.message, span.start, span.end)
+                                }
+                                None => warn!("  - {}", e.message),
+                            }
+                        }
+                    }
+                }
             }
             Err(e) => warn!("Failed to parse commit message: {}", e),
         }
     }
 
-    info!("CoCoCheck finished checking {} commits.", commits.len());
+    warn!("CoCoCheck finished checking {} commits.", commits.len());
+
+    if failed_commits > 0 {
+        error!("{} commits failed the checks.", failed_commits);
+        std::process::exit(1);
+    }
 }
