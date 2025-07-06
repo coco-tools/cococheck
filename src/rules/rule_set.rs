@@ -12,6 +12,7 @@ impl RuleSet {
             Box::new(config.rules.allowed_types.clone()) as Box<dyn Rule>,
             Box::new(config.rules.body_line_length.clone()) as Box<dyn Rule>,
             Box::new(config.rules.header_length.clone()) as Box<dyn Rule>,
+            Box::new(config.rules.no_description_terminal_punctuation.clone()) as Box<dyn Rule>,
         ]
         .into_iter()
         .filter(|rule| rule.is_enabled())
