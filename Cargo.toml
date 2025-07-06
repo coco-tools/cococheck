@@ -1,16 +1,14 @@
-[package]
-name = "cococheck"
+[workspace]
+members = [
+    "cococheck-cli",
+    "cococheck-core"
+]
+resolver = "3"
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
 
-[dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
-env_logger = "0.11.8"
-git2 = "0.20.2"
-log = "0.4.27"
-regex = "1.11.1"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_yaml = "0.9.34"
-
-[dev-dependencies]
-pretty_assertions = "1.4.1"
+[workspace.dependencies]
+cococheck-core = { path = "cococheck-core" }

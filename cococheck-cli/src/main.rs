@@ -1,11 +1,8 @@
-mod config;
-mod parser;
-mod rules;
-
-use crate::config::{Config, load_config};
-use crate::parser::parse_conventional_commit;
-use crate::rules::RuleSet;
 use clap::Parser;
+use cococheck_core::config;
+use cococheck_core::config::{Config, load_config};
+use cococheck_core::parser::parse_conventional_commit;
+use cococheck_core::rules::RuleSet;
 use git2::{Commit, Oid, Repository, Sort};
 use log::{debug, error, info, warn};
 use std::io::Write;

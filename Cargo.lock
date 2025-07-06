@@ -125,13 +125,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 
 [[package]]
-name = "cococheck"
+name = "cococheck-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "cococheck-core",
  "env_logger",
  "git2",
  "log",
+]
+
+[[package]]
+name = "cococheck-core"
+version = "0.1.0"
+dependencies = [
  "pretty_assertions",
  "regex",
  "serde",
