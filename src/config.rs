@@ -1,4 +1,4 @@
-use crate::rules::{AllowedTypes, BodyLineLength, HeaderLength};
+use crate::rules::{AllowedTypes, BodyLineLength, HeaderLength, NoDescriptionTerminalPunctuation};
 use serde::Deserialize;
 use std::fmt;
 
@@ -20,6 +20,9 @@ pub struct RuleSet {
 
     #[serde(default)]
     pub header_length: HeaderLength,
+
+    #[serde(default)]
+    pub no_description_terminal_punctuation: NoDescriptionTerminalPunctuation,
 }
 
 #[derive(Debug)]
@@ -57,6 +60,10 @@ mod tests {
         assert_eq!(config.rules.allowed_types, AllowedTypes::default());
         assert_eq!(config.rules.body_line_length, BodyLineLength::default());
         assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(
+            config.rules.no_description_terminal_punctuation,
+            NoDescriptionTerminalPunctuation::default()
+        );
     }
 
     #[test]
@@ -68,6 +75,10 @@ mod tests {
         assert_eq!(config.rules.allowed_types, AllowedTypes::default());
         assert_eq!(config.rules.body_line_length, BodyLineLength::default());
         assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(
+            config.rules.no_description_terminal_punctuation,
+            NoDescriptionTerminalPunctuation::default()
+        );
     }
 
     #[test]
