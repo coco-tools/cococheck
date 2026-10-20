@@ -4,7 +4,7 @@ use cococheck_core::config::{Config, load_config};
 use cococheck_core::git::{GitError, get_commits};
 use cococheck_core::parser::parse_conventional_commit;
 use cococheck_core::rules::RuleSet;
-use log::{debug, error, info, warn};
+use log::{LevelFilter, debug, error, info, warn};
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -35,21 +35,16 @@ struct Cli {
 fn main() {
     let args = Cli::parse();
 
-    if args.debug {
-        unsafe {
-            std::env::set_var("RUST_LOG", "debug");
-        }
+    let level = if args.debug {
+        LevelFilter::Debug
     } else if args.info {
-        unsafe {
-            std::env::set_var("RUST_LOG", "info");
-        }
+        LevelFilter::Info
     } else {
-        unsafe {
-            std::env::set_var("RUST_LOG", "warn");
-        }
-    }
+        LevelFilter::Warn
+    };
 
-    env_logger::Builder::from_default_env()
+    env_logger::Builder::new()
+        .filter_level(level)
         .format(|_, record| writeln!(std::io::stdout(), "{}", record.args()))
         .init();
 
