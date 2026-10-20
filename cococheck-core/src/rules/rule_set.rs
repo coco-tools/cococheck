@@ -10,6 +10,7 @@ impl RuleSet {
     pub fn new(config: &Config) -> Self {
         let rules: Vec<Box<dyn Rule>> = vec![
             Box::new(config.rules.allowed_types.clone()) as Box<dyn Rule>,
+            Box::new(config.rules.blank_line_before_footer.clone()) as Box<dyn Rule>,
             Box::new(config.rules.body_line_length.clone()) as Box<dyn Rule>,
             Box::new(config.rules.header_length.clone()) as Box<dyn Rule>,
             Box::new(config.rules.no_description_terminal_punctuation.clone()) as Box<dyn Rule>,

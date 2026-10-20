@@ -18,6 +18,9 @@ pub use rule_set::RuleSet;
 mod allowed_types;
 pub use allowed_types::AllowedTypes;
 
+mod blank_line_before_footer;
+pub use blank_line_before_footer::BlankLineBeforeFooter;
+
 mod body_line_length;
 pub use body_line_length::BodyLineLength;
 
