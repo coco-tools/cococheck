@@ -167,4 +167,17 @@ mod tests {
         "#;
         assert!(matches!(parse_config(yaml), Err(ConfigError::Parse(_))));
     }
+
+    #[test]
+    fn read_default_value_for_empty_rule() {
+        let yaml = r#"
+        rules:
+          no_description_terminal_punctuation: {}
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.no_description_terminal_punctuation,
+            NoDescriptionTerminalPunctuation::default()
+        );
+    }
 }
