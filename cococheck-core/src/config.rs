@@ -7,12 +7,12 @@ use std::path::Path;
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default, deserialize_with = "null_as_default")]
-    pub rules: RuleSet,
+    pub rules: RulesConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct RuleSet {
+pub struct RulesConfig {
     #[serde(default, deserialize_with = "null_as_default")]
     pub allowed_types: AllowedTypes,
 
