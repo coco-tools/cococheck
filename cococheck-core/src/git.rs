@@ -101,13 +101,16 @@ fn resolve_revision(
     name: &'static str,
     revision: &str,
 ) -> Result<Oid, GitError> {
-    repo.revparse_single(revision)
-        .map(|object| object.id())
+    let object = repo
+        .revparse_single(revision)
         .map_err(|source| GitError::RevisionNotFound {
             name,
             revision: revision.to_string(),
             source,
-        })
+        })?;
+
+    // Peel the object to get the commit an annotated tag points to.
+    Ok(object.peel_to_commit()?.id())
 }
 
 fn find_first_commit(repo: &Repository) -> Result<Oid, git2::Error> {
@@ -237,6 +240,23 @@ mod tests {
         let range = get_commits(dir.path(), Some(&merge.to_string()), None).unwrap();
 
         assert_eq!(messages(&range), vec!["merge", "after merge"]);
+    }
+
+    #[test]
+    fn resolves_annotated_tags() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second", "third", "fourth"]);
+        let signature = Signature::new("Test", "test@example.org", &Time::new(0, 0)).unwrap();
+        for (name, oid) in [("v1", oids[1]), ("v2", oids[2])] {
+            let target = repo.find_object(oid, None).unwrap();
+            repo.tag(name, &target, &signature, name, false).unwrap();
+        }
+
+        let range = get_commits(dir.path(), Some("v1"), Some("v2")).unwrap();
+
+        assert_eq!(messages(&range), vec!["second", "third"]);
+        assert_eq!(range.from, oids[1].to_string());
+        assert_eq!(range.to, oids[2].to_string());
     }
 
     #[test]
