@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct NoDescriptionTerminalPunctuation {
+    #[serde(default = "NoDescriptionTerminalPunctuation::default_enabled")]
     pub enabled: bool,
 }
 
