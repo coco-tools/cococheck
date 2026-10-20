@@ -125,7 +125,7 @@ fn main() {
     for commit in &commits {
         let message = &commit.message;
 
-        match parse_conventional_commit(message) {
+        match parse_conventional_commit(message, &config.parser) {
             Ok(parsed) => {
                 let rule_errors = rule_set.check_commit(&parsed);
                 let failed = rule_errors.iter().any(|(_, errors)| !errors.is_empty());

@@ -1,4 +1,5 @@
 use regex::regex;
+use serde::Deserialize;
 use std::fmt;
 
 #[derive(Debug, PartialEq)]
@@ -31,7 +32,29 @@ impl fmt::Display for ParseError {
     }
 }
 
-pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, ParseError> {
+#[derive(Debug, Default, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ParserConfig {
+    /// How the footer paragraphs at the end of the commit message are detected.
+    #[serde(default)]
+    pub footer_detection: FooterDetection,
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum FooterDetection {
+    /// Only the last paragraph can contain footers, if its first line is a footer.
+    #[default]
+    LastParagraph,
+
+    /// All trailing paragraphs whose first line is a footer contain footers.
+    TrailingParagraphs,
+}
+
+pub fn parse_conventional_commit(
+    message: &str,
+    config: &ParserConfig,
+) -> Result<ConventionalCommit, ParseError> {
     let mut lines = message.lines();
 
     let header_line = lines.next().unwrap_or("").trim();
@@ -67,44 +90,46 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
         });
     }
 
-    let mut body_lines = Vec::new();
-    let mut footer_lines = Vec::new();
-    let mut footer_started = false;
-    let mut last_line_empty = true;
-    let mut breaking_change_footer_found = false;
+    let paragraphs = split_paragraphs(lines);
 
-    for line in lines {
-        let line = line.trim();
-        if !footer_started && last_line_empty && parse_footer_line(line).is_some() {
-            footer_started = true;
-        }
+    let starts_with_footer = |paragraph: &&Vec<&str>| parse_footer_line(paragraph[0]).is_some();
+    let footer_paragraph_count = match config.footer_detection {
+        FooterDetection::LastParagraph => paragraphs
+            .last()
+            .filter(starts_with_footer)
+            .map_or(0, |_| 1),
+        FooterDetection::TrailingParagraphs => paragraphs
+            .iter()
+            .rev()
+            .take_while(starts_with_footer)
+            .count(),
+    };
 
-        if footer_started {
-            footer_lines.push(line.to_string());
-        } else {
-            body_lines.push(line.to_string());
-        }
+    let (body_paragraphs, footer_paragraphs) =
+        paragraphs.split_at(paragraphs.len() - footer_paragraph_count);
 
-        last_line_empty = line.is_empty();
-    }
-
-    if body_lines.last().is_some_and(|last| last.is_empty()) {
-        body_lines.pop();
-    }
-
-    let body = if body_lines.is_empty() {
+    let body = if body_paragraphs.is_empty() {
         None
     } else {
-        Some(body_lines.join("\n"))
+        Some(
+            body_paragraphs
+                .iter()
+                .map(|paragraph| paragraph.join("\n"))
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+        )
     };
 
     let mut footers = Vec::new();
+    let mut breaking_change_footer_found = false;
 
     let mut current_token: Option<String> = None;
     let mut current_value: Option<String> = None;
 
-    for line in footer_lines {
-        if let Some((token, value)) = parse_footer_line(&line) {
+    // Blank lines only separate footer paragraphs, so iterating the lines of all footer paragraphs
+    // ensures that they never end up in footer values.
+    for &line in footer_paragraphs.iter().flatten() {
+        if let Some((token, value)) = parse_footer_line(line) {
             if let (Some(token), Some(value)) = (current_token.take(), current_value.take()) {
                 footers.push(Footer { token, value });
             }
@@ -118,7 +143,7 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
         } else {
             if let Some(ref mut s) = current_value {
                 s.push('\n');
-                s.push_str(&line);
+                s.push_str(line);
             }
         }
     }
@@ -136,6 +161,28 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
         body,
         footer: footers,
     })
+}
+
+/// Split the trimmed lines into paragraphs separated by one or more empty lines.
+fn split_paragraphs<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<Vec<&'a str>> {
+    let mut paragraphs: Vec<Vec<&str>> = Vec::new();
+    let mut last_line_empty = true;
+
+    for line in lines.map(str::trim) {
+        if line.is_empty() {
+            last_line_empty = true;
+            continue;
+        }
+
+        match paragraphs.last_mut() {
+            Some(paragraph) if !last_line_empty => paragraph.push(line),
+            _ => paragraphs.push(vec![line]),
+        }
+
+        last_line_empty = false;
+    }
+
+    paragraphs
 }
 
 pub fn parse_footer_line(line: &str) -> Option<(String, String)> {
@@ -172,7 +219,10 @@ mod tests {
             body: None,
             footer: Vec::new(),
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -187,7 +237,10 @@ mod tests {
             body: None,
             footer: Vec::new(),
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -202,7 +255,10 @@ mod tests {
             body: None,
             footer: Vec::new(),
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -238,7 +294,10 @@ mod tests {
                 value: "#123".to_string()
             }],
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -270,7 +329,10 @@ mod tests {
                 value: "John Doe <john.doe@example.org>".to_string()
             }],
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -303,7 +365,10 @@ mod tests {
                 },
             ],
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -336,7 +401,10 @@ mod tests {
                 },
             ],
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
     }
 
     #[test]
@@ -351,7 +419,7 @@ mod tests {
         .trim();
 
         assert_eq!(
-            parse_conventional_commit(message)
+            parse_conventional_commit(message, &ParserConfig::default())
                 .unwrap()
                 .is_breaking_change,
             true
@@ -367,7 +435,7 @@ mod tests {
         .trim();
 
         assert_eq!(
-            parse_conventional_commit(message)
+            parse_conventional_commit(message, &ParserConfig::default())
                 .unwrap()
                 .is_breaking_change,
             true
@@ -383,7 +451,7 @@ mod tests {
         "#
         .trim();
 
-        let commit = parse_conventional_commit(message).unwrap();
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
 
         assert!(!commit.is_breaking_change);
         assert_eq!(
@@ -398,7 +466,7 @@ mod tests {
     #[test]
     fn fails_on_invalid_header() {
         let message = "invalid commit message format";
-        let result = parse_conventional_commit(message);
+        let result = parse_conventional_commit(message, &ParserConfig::default());
         match result {
             Err(ParseError::InvalidFormat(msg)) => {
                 assert_eq!(
@@ -413,7 +481,7 @@ mod tests {
     #[test]
     fn fails_on_non_empty_line_after_header() {
         let message = "feat: add new feature\nThis line should not be here";
-        let result = parse_conventional_commit(message);
+        let result = parse_conventional_commit(message, &ParserConfig::default());
         match result {
             Err(ParseError::InvalidFormat(msg)) => {
                 assert_eq!(msg, "The line after the header must be empty");
@@ -441,6 +509,96 @@ mod tests {
             body: Some("This is the body.\nBREAKING CHANGE: major update".to_string()),
             footer: Vec::new(),
         };
-        assert_eq!(parse_conventional_commit(message).unwrap(), expected);
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
+            expected
+        );
+    }
+
+    const TRAILING_PARAGRAPHS: ParserConfig = ParserConfig {
+        footer_detection: FooterDetection::TrailingParagraphs,
+    };
+
+    fn footer(token: &str, value: &str) -> Footer {
+        Footer {
+            token: token.to_string(),
+            value: value.to_string(),
+        }
+    }
+
+    #[test]
+    fn does_not_parse_body_paragraphs_as_footers() {
+        let message = r#"
+        feat: add new feature
+
+        Intro.
+
+        Note: this is prose.
+
+        More body text.
+
+        Refs: #1
+        "#
+        .trim();
+
+        for config in [ParserConfig::default(), TRAILING_PARAGRAPHS] {
+            let commit = parse_conventional_commit(message, &config).unwrap();
+            assert_eq!(
+                commit.body,
+                Some("Intro.\n\nNote: this is prose.\n\nMore body text.".to_string())
+            );
+            assert_eq!(commit.footer, vec![footer("Refs", "#1")]);
+        }
+    }
+
+    #[test]
+    fn detects_only_last_paragraph_as_footer_by_default() {
+        let message = "feat: add new feature\n\nBody.\n\nRefs: #1\n\nSigned-off-by: John Doe";
+
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+
+        assert_eq!(commit.body, Some("Body.\n\nRefs: #1".to_string()));
+        assert_eq!(commit.footer, vec![footer("Signed-off-by", "John Doe")]);
+    }
+
+    #[test]
+    fn detects_trailing_paragraphs_as_footers() {
+        let message =
+            "feat: add new feature\n\nBody.\n\n\nRefs: #1\n\n\nSigned-off-by: John Doe\n\n";
+
+        let commit = parse_conventional_commit(message, &TRAILING_PARAGRAPHS).unwrap();
+
+        assert_eq!(commit.body, Some("Body.".to_string()));
+        assert_eq!(
+            commit.footer,
+            vec![footer("Refs", "#1"), footer("Signed-off-by", "John Doe")]
+        );
+    }
+
+    #[test]
+    fn ignores_trailing_empty_lines() {
+        let message = "feat: add new feature\n\nBody.\n\nBREAKING CHANGE: major\nupdate\n\n\n";
+
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+
+        assert_eq!(commit.body, Some("Body.".to_string()));
+        assert_eq!(
+            commit.footer,
+            vec![footer("BREAKING CHANGE", "major\nupdate")]
+        );
+        assert!(commit.is_breaking_change);
+    }
+
+    #[test]
+    fn parses_footers_without_body() {
+        let message = "feat: add new feature\n\nRefs: #1\n\nSigned-off-by: John Doe";
+
+        let commit = parse_conventional_commit(message, &TRAILING_PARAGRAPHS).unwrap();
+
+        assert_eq!(commit.body, None);
+        assert_eq!(
+            commit.footer,
+            vec![footer("Refs", "#1"), footer("Signed-off-by", "John Doe")]
+        );
     }
 }
