@@ -1,6 +1,7 @@
 use crate::rules::{AllowedTypes, BodyLineLength, HeaderLength, NoDescriptionTerminalPunctuation};
 use serde::{Deserialize, Deserializer};
 use std::fmt;
+use std::path::Path;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -54,7 +55,7 @@ pub fn parse_config(content: &str) -> Result<Config, ConfigError> {
     serde_saphyr::from_str(content).map_err(ConfigError::Parse)
 }
 
-pub fn load_config(path: &str) -> Result<Config, ConfigError> {
+pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
     let content = std::fs::read_to_string(path).map_err(ConfigError::Io)?;
     parse_config(&content)
 }
@@ -179,5 +180,17 @@ mod tests {
             config.rules.no_description_terminal_punctuation,
             NoDescriptionTerminalPunctuation::default()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn loads_config_from_path_that_is_not_valid_utf8() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join(std::ffi::OsStr::from_bytes(b"caf\xe9.yml"));
+        std::fs::write(&path, "rules: {}").unwrap();
+
+        assert!(load_config(&path).is_ok());
     }
 }
