@@ -57,7 +57,7 @@ fn main() {
     info!("Checking Git repository at: {}", args.input.display());
 
     let config_path = args.input.join("cococheck.yml");
-    let config = match load_config(config_path.to_str().unwrap()) {
+    let config = match load_config(&config_path) {
         Ok(cfg) => {
             info!(
                 "Using config file: {}",
