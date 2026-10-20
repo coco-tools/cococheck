@@ -101,8 +101,11 @@ fn main() {
             error!("The repository does not contain any commits.");
             std::process::exit(1);
         }
-        Err(GitError::EmptyRange) => {
-            error!("The specified commit range is empty (possibly --to is before --from).");
+        Err(GitError::NotAnAncestor { from, to }) => {
+            error!(
+                "The specified --from commit '{}' is not an ancestor of the --to commit '{}'.",
+                from, to
+            );
             std::process::exit(1);
         }
         Err(GitError::Git(e)) => {
