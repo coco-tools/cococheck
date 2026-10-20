@@ -1,34 +1,44 @@
 use crate::rules::{AllowedTypes, BodyLineLength, HeaderLength, NoDescriptionTerminalPunctuation};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::fmt;
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub rules: RuleSet,
 }
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuleSet {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub allowed_types: AllowedTypes,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub body_line_length: BodyLineLength,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub header_length: HeaderLength,
 
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub no_description_terminal_punctuation: NoDescriptionTerminalPunctuation,
+}
+
+/// Deserialize a YAML null value, like an empty `rules:` key, as the default value, instead of
+/// failing because a null value cannot be deserialized into a struct.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Option::<T>::deserialize(deserializer).map(Option::unwrap_or_default)
 }
 
 #[derive(Debug)]
 pub enum ConfigError {
     Io(std::io::Error),
-    Parse(serde_yaml::Error),
+    Parse(serde_saphyr::Error),
 }
 
 impl fmt::Display for ConfigError {
@@ -41,7 +51,7 @@ impl fmt::Display for ConfigError {
 }
 
 pub fn parse_config(content: &str) -> Result<Config, ConfigError> {
-    serde_yaml::from_str(content).map_err(ConfigError::Parse)
+    serde_saphyr::from_str(content).map_err(ConfigError::Parse)
 }
 
 pub fn load_config(path: &str) -> Result<Config, ConfigError> {
@@ -124,5 +134,37 @@ mod tests {
                 ..Default::default()
             }
         );
+    }
+
+    #[test]
+    fn read_default_value_for_null_rules() {
+        let config = parse_config("rules:").unwrap();
+        assert_eq!(config.rules.allowed_types, AllowedTypes::default());
+        assert_eq!(config.rules.header_length, HeaderLength::default());
+    }
+
+    #[test]
+    fn read_default_value_for_null_rule() {
+        let yaml = r#"
+        rules:
+          header_length:
+          no_description_terminal_punctuation:
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(
+            config.rules.no_description_terminal_punctuation,
+            NoDescriptionTerminalPunctuation::default()
+        );
+    }
+
+    #[test]
+    fn fails_for_unknown_rule() {
+        let yaml = r#"
+        rules:
+          unknown_rule:
+            enabled: true
+        "#;
+        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse(_))));
     }
 }
