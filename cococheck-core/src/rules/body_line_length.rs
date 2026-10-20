@@ -42,13 +42,14 @@ impl Rule for BodyLineLength {
         let mut errors = Vec::new();
         if let Some(body) = &commit.body {
             for (i, line) in body.lines().enumerate() {
-                if line.len() > self.max_length {
+                let length = line.chars().count();
+                if length > self.max_length {
                     errors.push(RuleError {
                         message: format!(
                             "Body line {} exceeds maximum length of {} characters (actual: {}).",
                             i + 1,
                             self.max_length,
-                            line.len()
+                            length
                         ),
                         span: Some(0..line.len()),
                     });
@@ -84,6 +85,19 @@ mod tests {
         .unwrap();
         let rule = BodyLineLength {
             max_length: 100,
+            ..Default::default()
+        };
+        assert!(rule.check(&commit).is_ok());
+    }
+
+    #[test]
+    fn counts_characters_instead_of_bytes() {
+        // The body line has 25 characters, but 30 bytes in UTF-8.
+        let commit =
+            parse_conventional_commit("feat: add new feature\n\nÄnderungen für Übergrößen")
+                .unwrap();
+        let rule = BodyLineLength {
+            max_length: 25,
             ..Default::default()
         };
         assert!(rule.check(&commit).is_ok());
