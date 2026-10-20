@@ -39,12 +39,12 @@ impl Rule for HeaderLength {
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
-        if commit.header.len() > self.max_length {
+        let length = commit.header.chars().count();
+        if length > self.max_length {
             Err(vec![RuleError {
                 message: format!(
                     "Header exceeds maximum length of {} characters (actual: {}).",
-                    self.max_length,
-                    commit.header.len()
+                    self.max_length, length
                 ),
                 span: Some(0..commit.header.len()),
             }])
@@ -64,6 +64,17 @@ mod tests {
         let commit = parse_conventional_commit("feat: add new feature").unwrap();
         let rule = HeaderLength {
             max_length: 50,
+            ..Default::default()
+        };
+        assert!(rule.check(&commit).is_ok());
+    }
+
+    #[test]
+    fn counts_characters_instead_of_bytes() {
+        // 20 characters, but 23 bytes in UTF-8.
+        let commit = parse_conventional_commit("feat: Größenänderung").unwrap();
+        let rule = HeaderLength {
+            max_length: 20,
             ..Default::default()
         };
         assert!(rule.check(&commit).is_ok());
