@@ -130,7 +130,7 @@ fn commits_between_inclusive(
     let mut revwalk = repo.revwalk()?;
     revwalk.push(to)?;
 
-    if let Some(parent_oid) = from_commit.parent_ids().next() {
+    for parent_oid in from_commit.parent_ids() {
         revwalk.hide(parent_oid)?;
     }
 
@@ -223,6 +223,20 @@ mod tests {
         .unwrap();
 
         assert_eq!(messages(&range), vec!["second", "third"]);
+    }
+
+    #[test]
+    fn excludes_merged_branches_if_from_is_a_merge_commit() {
+        let (dir, repo) = init_repo();
+        let base = commit(&repo, "base", &[]);
+        let main = commit(&repo, "main", &[base]);
+        let side = commit(&repo, "side", &[base]);
+        let merge = commit(&repo, "merge", &[main, side]);
+        commit(&repo, "after merge", &[merge]);
+
+        let range = get_commits(dir.path(), Some(&merge.to_string()), None).unwrap();
+
+        assert_eq!(messages(&range), vec!["merge", "after merge"]);
     }
 
     #[test]
