@@ -1,9 +1,9 @@
 use clap::Parser;
 use cococheck_core::config;
 use cococheck_core::config::{Config, load_config};
+use cococheck_core::git::{GitError, get_commits};
 use cococheck_core::parser::parse_conventional_commit;
 use cococheck_core::rules::RuleSet;
-use git2::{Commit, Oid, Repository, Sort};
 use log::{debug, error, info, warn};
 use std::io::Write;
 use std::path::PathBuf;
@@ -30,41 +30,6 @@ struct Cli {
     /// Enable debug logging
     #[arg(long)]
     debug: bool,
-}
-
-fn find_first_commit(repo: &Repository) -> Result<Oid, git2::Error> {
-    let mut revwalk = repo.revwalk()?;
-    revwalk.push_head()?;
-    revwalk.set_sorting(Sort::REVERSE)?;
-    revwalk
-        .next()
-        .transpose()?
-        .ok_or_else(|| git2::Error::from_str("No commits found"))
-}
-
-fn commits_between_inclusive(
-    repo: &Repository,
-    from: Oid,
-    to: Oid,
-) -> Result<Vec<Commit<'_>>, git2::Error> {
-    let from_commit = repo.find_commit(from)?;
-
-    let mut revwalk = repo.revwalk()?;
-    revwalk.push(to)?;
-
-    if let Some(parent_oid) = from_commit.parent_ids().next() {
-        revwalk.hide(parent_oid)?;
-    }
-
-    revwalk.set_sorting(Sort::TOPOLOGICAL | Sort::REVERSE)?;
-
-    let mut commits = Vec::new();
-    for oid in revwalk {
-        let commit = repo.find_commit(oid?)?;
-        commits.push(commit);
-    }
-
-    Ok(commits)
 }
 
 fn main() {
@@ -113,70 +78,50 @@ fn main() {
         }
     };
 
-    let repo = match Repository::open(&args.input) {
-        Ok(repo) => repo,
-        Err(e) => {
+    let range = match get_commits(&args.input, args.from.as_deref(), args.to.as_deref()) {
+        Ok(range) => range,
+        Err(GitError::OpenRepository(e)) => {
             error!("Error opening repository: {}", e);
             std::process::exit(1);
         }
-    };
-
-    let to_oid = match &args.to {
-        Some(s) => match repo.revparse_single(s) {
-            Ok(obj) => obj.id(),
-            Err(e) => {
-                error!(
-                    "The specified --to reference '{}' could not be found: {}",
-                    s,
-                    e.message()
-                );
-                std::process::exit(1);
-            }
-        },
-        None => repo.head().unwrap().target().unwrap(),
-    };
-    let from_oid = match &args.from {
-        Some(s) => match repo.revparse_single(s) {
-            Ok(obj) => obj.id(),
-            Err(e) => {
-                error!(
-                    "The specified --from reference '{}' could not be found: {}",
-                    s,
-                    e.message()
-                );
-                std::process::exit(1);
-            }
-        },
-        None => find_first_commit(&repo).expect("No commits in repository"),
+        Err(GitError::RevisionNotFound {
+            name,
+            revision,
+            source,
+        }) => {
+            error!(
+                "The specified --{} reference '{}' could not be found: {}",
+                name,
+                revision,
+                source.message()
+            );
+            std::process::exit(1);
+        }
+        Err(GitError::EmptyRange) => {
+            error!("The specified commit range is empty (possibly --to is before --from).");
+            std::process::exit(1);
+        }
+        Err(GitError::Git(e)) => {
+            error!("Error collecting commits: {}", e);
+            std::process::exit(1);
+        }
     };
 
     info!(
         "Using commit range {}..{} ({}..{})",
         args.from.as_deref().unwrap_or("<first commit>"),
         args.to.as_deref().unwrap_or("HEAD"),
-        from_oid,
-        to_oid,
+        range.from,
+        range.to,
     );
 
-    let commits = match commits_between_inclusive(&repo, from_oid, to_oid) {
-        Ok(commits) => {
-            if commits.is_empty() {
-                error!("The specified commit range is empty (possibly --to is before --from).");
-                std::process::exit(1);
-            }
-            commits
-        }
-        Err(e) => {
-            error!("Error collecting commits: {}", e);
-            std::process::exit(1);
-        }
-    };
+    let commits = range.commits;
 
     let rule_set = RuleSet::new(&config);
     let mut failed_commits = 0;
 
     for commit in &commits {
-        let message = commit.message().unwrap_or("<no commit message>");
+        let message = &commit.message;
 
         match parse_conventional_commit(message) {
             Ok(parsed) => {
@@ -185,12 +130,12 @@ fn main() {
 
                 if failed {
                     failed_commits += 1;
-                    warn!("Commit {} failed:", commit.id());
+                    warn!("Commit {} failed:", commit.id);
                     warn!("\n--- MESSAGE ---");
                     warn!("Message: {}", message);
                     warn!("--- END MESSAGE ---\n");
                 } else {
-                    info!("Commit {} passed.", commit.id());
+                    info!("Commit {} passed.", commit.id);
                 }
 
                 debug!("{:#?}", parsed);
