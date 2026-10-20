@@ -117,7 +117,7 @@ fn main() {
         Ok(repo) => repo,
         Err(e) => {
             error!("Error opening repository: {}", e);
-            return;
+            std::process::exit(1);
         }
     };
 
@@ -168,7 +168,7 @@ fn main() {
         }
         Err(e) => {
             error!("Error collecting commits: {}", e);
-            return;
+            std::process::exit(1);
         }
     };
 
