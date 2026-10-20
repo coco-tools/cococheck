@@ -154,10 +154,7 @@ fn commits_between_inclusive(
         let commit = repo.find_commit(oid?)?;
         commits.push(CommitInfo {
             id: commit.id().to_string(),
-            message: commit
-                .message()
-                .unwrap_or("<no commit message>")
-                .to_string(),
+            message: String::from_utf8_lossy(commit.message_bytes()).into_owned(),
         });
     }
 
@@ -167,7 +164,7 @@ fn commits_between_inclusive(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use git2::{Signature, Time};
+    use git2::{ObjectType, Signature, Time};
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
@@ -313,6 +310,32 @@ mod tests {
                 message: "first".to_string(),
             }]
         );
+    }
+
+    #[test]
+    fn replaces_invalid_utf8_in_messages() {
+        let (dir, repo) = init_repo();
+        let tree = repo.treebuilder(None).unwrap().write().unwrap();
+        // A message encoded in ISO-8859-1 instead of UTF-8.
+        let mut content = format!(
+            "tree {tree}\n\
+             author Test <test@example.org> 0 +0000\n\
+             committer Test <test@example.org> 0 +0000\n\n"
+        )
+        .into_bytes();
+        content.extend_from_slice(b"feat: Add caf\xe9");
+        let oid = repo
+            .odb()
+            .unwrap()
+            .write(ObjectType::Commit, &content)
+            .unwrap();
+        repo.reference("refs/heads/main", oid, true, "test")
+            .unwrap();
+        repo.set_head("refs/heads/main").unwrap();
+
+        let range = get_commits(dir.path(), None, None).unwrap();
+
+        assert_eq!(messages(&range), vec!["feat: Add caf\u{FFFD}"]);
     }
 
     #[test]
