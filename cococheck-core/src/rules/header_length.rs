@@ -57,11 +57,12 @@ impl Rule for HeaderLength {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parse_conventional_commit;
+    use crate::parser::{ParserConfig, parse_conventional_commit};
 
     #[test]
     fn succeeds_for_valid_length() {
-        let commit = parse_conventional_commit("feat: add new feature").unwrap();
+        let commit =
+            parse_conventional_commit("feat: add new feature", &ParserConfig::default()).unwrap();
         let rule = HeaderLength {
             max_length: 50,
             ..Default::default()
@@ -72,7 +73,8 @@ mod tests {
     #[test]
     fn counts_characters_instead_of_bytes() {
         // 20 characters, but 23 bytes in UTF-8.
-        let commit = parse_conventional_commit("feat: Größenänderung").unwrap();
+        let commit =
+            parse_conventional_commit("feat: Größenänderung", &ParserConfig::default()).unwrap();
         let rule = HeaderLength {
             max_length: 20,
             ..Default::default()
@@ -84,6 +86,7 @@ mod tests {
     fn fails_when_header_exceeds_max_length() {
         let long_commit = parse_conventional_commit(
             "feat: this is a very long header that exceeds the maximum length",
+            &ParserConfig::default(),
         )
         .unwrap();
         let rule = HeaderLength {
