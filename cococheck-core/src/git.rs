@@ -1,4 +1,4 @@
-use git2::{Oid, Repository, Sort};
+use git2::{ErrorCode, Oid, Repository, Sort};
 use std::fmt;
 use std::path::Path;
 
@@ -23,6 +23,7 @@ pub enum GitError {
         revision: String,
         source: git2::Error,
     },
+    NoCommits,
     EmptyRange,
     Git(git2::Error),
 }
@@ -42,6 +43,7 @@ impl fmt::Display for GitError {
                 revision,
                 source.message()
             ),
+            GitError::NoCommits => write!(f, "The repository does not contain any commits."),
             GitError::EmptyRange => write!(
                 f,
                 "The commit range is empty (possibly 'to' is before 'from')."
@@ -69,10 +71,13 @@ pub fn get_commits(
 
     let to_oid = match to {
         Some(revision) => resolve_revision(&repo, "to", revision)?,
-        None => repo
-            .head()?
-            .target()
-            .ok_or_else(|| git2::Error::from_str("HEAD does not point to a commit"))?,
+        None => match repo.head() {
+            Ok(head) => head
+                .target()
+                .ok_or_else(|| git2::Error::from_str("HEAD does not point to a commit"))?,
+            Err(e) if e.code() == ErrorCode::UnbornBranch => return Err(GitError::NoCommits),
+            Err(e) => return Err(e.into()),
+        },
     };
     let from_oid = match from {
         Some(revision) => resolve_revision(&repo, "from", revision)?,
@@ -247,6 +252,15 @@ mod tests {
             result,
             Err(GitError::RevisionNotFound { name: "from", .. })
         ));
+    }
+
+    #[test]
+    fn fails_for_repository_without_commits() {
+        let (dir, _repo) = init_repo();
+
+        let result = get_commits(dir.path(), None, None);
+
+        assert!(matches!(result, Err(GitError::NoCommits)));
     }
 
     #[test]
