@@ -1,3 +1,4 @@
+use crate::parser::ParserConfig;
 use crate::rules::{AllowedTypes, BodyLineLength, HeaderLength, NoDescriptionTerminalPunctuation};
 use serde::{Deserialize, Deserializer};
 use std::fmt;
@@ -6,6 +7,9 @@ use std::path::Path;
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub parser: ParserConfig,
+
     #[serde(default, deserialize_with = "null_as_default")]
     pub rules: RulesConfig,
 }
@@ -63,6 +67,7 @@ pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::FooterDetection;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -75,6 +80,41 @@ mod tests {
             config.rules.no_description_terminal_punctuation,
             NoDescriptionTerminalPunctuation::default()
         );
+    }
+
+    #[test]
+    fn read_default_parser_config_for_empty_config() {
+        assert_eq!(parse_config("").unwrap().parser, ParserConfig::default());
+        assert_eq!(
+            parse_config("parser:").unwrap().parser,
+            ParserConfig::default()
+        );
+        assert_eq!(
+            ParserConfig::default().footer_detection,
+            FooterDetection::LastParagraph
+        );
+    }
+
+    #[test]
+    fn read_footer_detection() {
+        let yaml = r#"
+        parser:
+          footer_detection: trailing_paragraphs
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.parser.footer_detection,
+            FooterDetection::TrailingParagraphs
+        );
+    }
+
+    #[test]
+    fn fails_for_unknown_footer_detection() {
+        let yaml = r#"
+        parser:
+          footer_detection: first_paragraph
+        "#;
+        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse(_))));
     }
 
     #[test]

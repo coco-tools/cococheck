@@ -68,7 +68,7 @@ impl Rule for BodyLineLength {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parse_conventional_commit;
+    use crate::parser::{ParserConfig, parse_conventional_commit};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -81,6 +81,7 @@ mod tests {
             This is another one.
             "#
             .trim(),
+            &ParserConfig::default(),
         )
         .unwrap();
         let rule = BodyLineLength {
@@ -93,9 +94,11 @@ mod tests {
     #[test]
     fn counts_characters_instead_of_bytes() {
         // The body line has 25 characters, but 30 bytes in UTF-8.
-        let commit =
-            parse_conventional_commit("feat: add new feature\n\nÄnderungen für Übergrößen")
-                .unwrap();
+        let commit = parse_conventional_commit(
+            "feat: add new feature\n\nÄnderungen für Übergrößen",
+            &ParserConfig::default(),
+        )
+        .unwrap();
         let rule = BodyLineLength {
             max_length: 25,
             ..Default::default()
@@ -115,6 +118,7 @@ mod tests {
             This line is also too long.
             "#
             .trim(),
+            &ParserConfig::default(),
         )
         .unwrap();
         let rule = BodyLineLength {
