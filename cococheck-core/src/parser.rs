@@ -1,4 +1,4 @@
-use regex::Regex;
+use regex::regex;
 use std::fmt;
 
 #[derive(Debug, PartialEq)]
@@ -36,8 +36,7 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
 
     let header_line = lines.next().unwrap_or("").trim();
     let header_regex =
-        Regex::new(r"^(?P<type>\w+)(\((?P<scope>[^)]+)\))?(?P<breaking>!)?: (?P<desc>.+)$")
-            .unwrap();
+        regex!(r"^(?P<type>\w+)(\((?P<scope>[^)]+)\))?(?P<breaking>!)?: (?P<desc>.+)$");
 
     let caps = match header_regex.captures(header_line) {
         Some(caps) => caps,
@@ -140,10 +139,8 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
 }
 
 pub fn parse_footer_line(line: &str) -> Option<(String, String)> {
-    let footer_regex = Regex::new(
-        r"^(?P<token>BREAKING CHANGE|\[[^]]+]|[\p{L}\p{N}-]+)(?P<sep>: | #)(?P<value>.+)$",
-    )
-    .unwrap();
+    let footer_regex =
+        regex!(r"^(?P<token>BREAKING CHANGE|\[[^]]+]|[\p{L}\p{N}-]+)(?P<sep>: | #)(?P<value>.+)$");
 
     footer_regex.captures(line).map(|caps| {
         let token = caps.name("token").unwrap().as_str().to_string();
