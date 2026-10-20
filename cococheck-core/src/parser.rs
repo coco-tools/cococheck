@@ -110,9 +110,7 @@ pub fn parse_conventional_commit(message: &str) -> Result<ConventionalCommit, Pa
                 footers.push(Footer { token, value });
             }
 
-            if token.eq_ignore_ascii_case("BREAKING CHANGE")
-                || token.eq_ignore_ascii_case("BREAKING-CHANGE")
-            {
+            if token == "BREAKING CHANGE" || token == "BREAKING-CHANGE" {
                 breaking_change_footer_found = true;
             }
 
@@ -376,6 +374,27 @@ mod tests {
                 .unwrap()
                 .is_breaking_change,
             true
+        );
+    }
+
+    #[test]
+    fn ignores_lowercase_breaking_change_footer() {
+        let message = r#"
+        feat: add new feature
+
+        breaking-change: not a breaking change
+        "#
+        .trim();
+
+        let commit = parse_conventional_commit(message).unwrap();
+
+        assert!(!commit.is_breaking_change);
+        assert_eq!(
+            commit.footer,
+            vec![Footer {
+                token: "breaking-change".to_string(),
+                value: "not a breaking change".to_string(),
+            }]
         );
     }
 
