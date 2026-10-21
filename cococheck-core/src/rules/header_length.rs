@@ -4,17 +4,11 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct HeaderLength {
-    #[serde(default = "HeaderLength::default_enabled")]
-    pub enabled: bool,
     #[serde(default = "HeaderLength::default_max_length")]
     pub max_length: usize,
 }
 
 impl HeaderLength {
-    fn default_enabled() -> bool {
-        true
-    }
-
     fn default_max_length() -> usize {
         72
     }
@@ -23,7 +17,6 @@ impl HeaderLength {
 impl Default for HeaderLength {
     fn default() -> Self {
         HeaderLength {
-            enabled: Self::default_enabled(),
             max_length: Self::default_max_length(),
         }
     }
@@ -32,10 +25,6 @@ impl Default for HeaderLength {
 impl Rule for HeaderLength {
     fn name(&self) -> &str {
         "HeaderLength"
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
@@ -63,10 +52,7 @@ mod tests {
     fn succeeds_for_valid_length() {
         let commit =
             parse_conventional_commit("feat: add new feature", &ParserConfig::default()).unwrap();
-        let rule = HeaderLength {
-            max_length: 50,
-            ..Default::default()
-        };
+        let rule = HeaderLength { max_length: 50 };
         assert!(rule.check(&commit).is_empty());
     }
 
@@ -75,10 +61,7 @@ mod tests {
         // 20 characters, but 23 bytes in UTF-8.
         let commit =
             parse_conventional_commit("feat: Größenänderung", &ParserConfig::default()).unwrap();
-        let rule = HeaderLength {
-            max_length: 20,
-            ..Default::default()
-        };
+        let rule = HeaderLength { max_length: 20 };
         assert!(rule.check(&commit).is_empty());
     }
 
@@ -89,10 +72,7 @@ mod tests {
             &ParserConfig::default(),
         )
         .unwrap();
-        let rule = HeaderLength {
-            max_length: 30,
-            ..Default::default()
-        };
+        let rule = HeaderLength { max_length: 30 };
         assert_eq!(rule.check(&long_commit).len(), 1);
     }
 }

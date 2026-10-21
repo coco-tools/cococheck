@@ -1,4 +1,5 @@
 use crate::parser::ConventionalCommit;
+use serde::Deserialize;
 
 #[derive(Debug, PartialEq)]
 pub struct RuleError {
@@ -8,8 +9,30 @@ pub struct RuleError {
 
 pub trait Rule {
     fn name(&self) -> &str;
-    fn is_enabled(&self) -> bool;
     fn check(&self, message: &ConventionalCommit) -> Vec<RuleError>;
+}
+
+/// The configuration of a rule: Whether it is enabled, and the rule with its own options, which are
+/// flattened into the same YAML mapping as the `enabled` flag.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct RuleConfig<R> {
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+    #[serde(flatten)]
+    pub rule: R,
+}
+
+fn default_enabled() -> bool {
+    true
+}
+
+impl<R: Default> Default for RuleConfig<R> {
+    fn default() -> Self {
+        RuleConfig {
+            enabled: default_enabled(),
+            rule: R::default(),
+        }
+    }
 }
 
 mod rule_set;

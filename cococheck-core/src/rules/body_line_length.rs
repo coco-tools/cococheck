@@ -4,17 +4,11 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct BodyLineLength {
-    #[serde(default = "BodyLineLength::default_enabled")]
-    pub enabled: bool,
     #[serde(default = "BodyLineLength::default_max_length")]
     pub max_length: usize,
 }
 
 impl BodyLineLength {
-    fn default_enabled() -> bool {
-        true
-    }
-
     fn default_max_length() -> usize {
         72
     }
@@ -23,7 +17,6 @@ impl BodyLineLength {
 impl Default for BodyLineLength {
     fn default() -> Self {
         BodyLineLength {
-            enabled: Self::default_enabled(),
             max_length: Self::default_max_length(),
         }
     }
@@ -32,10 +25,6 @@ impl Default for BodyLineLength {
 impl Rule for BodyLineLength {
     fn name(&self) -> &str {
         "BodyLineLength"
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
@@ -80,10 +69,7 @@ mod tests {
             &ParserConfig::default(),
         )
         .unwrap();
-        let rule = BodyLineLength {
-            max_length: 100,
-            ..Default::default()
-        };
+        let rule = BodyLineLength { max_length: 100 };
         assert!(rule.check(&commit).is_empty());
     }
 
@@ -95,10 +81,7 @@ mod tests {
             &ParserConfig::default(),
         )
         .unwrap();
-        let rule = BodyLineLength {
-            max_length: 25,
-            ..Default::default()
-        };
+        let rule = BodyLineLength { max_length: 25 };
         assert!(rule.check(&commit).is_empty());
     }
 
@@ -117,10 +100,7 @@ mod tests {
             &ParserConfig::default(),
         )
         .unwrap();
-        let rule = BodyLineLength {
-            max_length: 12,
-            ..Default::default()
-        };
+        let rule = BodyLineLength { max_length: 12 };
 
         assert_eq!(
             rule.check(&commit),

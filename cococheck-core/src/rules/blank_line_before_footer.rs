@@ -2,33 +2,12 @@ use super::{Rule, RuleError};
 use crate::parser::{ConventionalCommit, parse_footer_line};
 use serde::Deserialize;
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct BlankLineBeforeFooter {
-    #[serde(default = "BlankLineBeforeFooter::default_enabled")]
-    pub enabled: bool,
-}
-
-impl BlankLineBeforeFooter {
-    fn default_enabled() -> bool {
-        true
-    }
-}
-
-impl Default for BlankLineBeforeFooter {
-    fn default() -> Self {
-        BlankLineBeforeFooter {
-            enabled: Self::default_enabled(),
-        }
-    }
-}
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+pub struct BlankLineBeforeFooter {}
 
 impl Rule for BlankLineBeforeFooter {
     fn name(&self) -> &str {
         "BlankLineBeforeFooter"
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
