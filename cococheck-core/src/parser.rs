@@ -44,7 +44,10 @@ pub enum ParseError {
     },
 
     #[error("the line after the header must be empty")]
-    MissingBlankLineAfterHeader,
+    MissingBlankLineAfterHeader {
+        /// The byte range of the line after the header in the full commit message.
+        span: Range<usize>,
+    },
 }
 
 /// The reason why a header does not have the form `type(scope)!: description`.
@@ -145,8 +148,16 @@ pub fn parse_conventional_commit(
         });
     };
 
-    if lines.next().is_some_and(|line| !line.trim().is_empty()) {
-        return Err(ParseError::MissingBlankLineAfterHeader);
+    // The lines are slices of `message`, so their offsets in the message can be computed.
+    let line_span = |line: &str| {
+        let start = line.as_ptr() as usize - message.as_ptr() as usize;
+        start..start + line.len()
+    };
+
+    if let Some(line) = lines.next().filter(|line| !line.trim().is_empty()) {
+        return Err(ParseError::MissingBlankLineAfterHeader {
+            span: line_span(line.trim_end()),
+        });
     }
 
     let paragraphs = split_paragraphs(lines);
@@ -177,12 +188,6 @@ pub fn parse_conventional_commit(
                 .collect::<Vec<_>>()
                 .join("\n\n"),
         )
-    };
-
-    // The paragraphs contain slices of `message`, so their offsets in the message can be computed.
-    let line_span = |line: &str| {
-        let start = line.as_ptr() as usize - message.as_ptr() as usize;
-        start..start + line.len()
     };
 
     let mut body_lines: Vec<Line> = Vec::new();
@@ -834,8 +839,9 @@ mod tests {
         let message = "feat: add new feature\nThis line should not be here";
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()),
-            Err(ParseError::MissingBlankLineAfterHeader)
+            Err(ParseError::MissingBlankLineAfterHeader { span: 22..50 })
         );
+        assert_eq!(&message[22..50], "This line should not be here");
     }
 
     #[test]
