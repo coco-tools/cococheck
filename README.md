@@ -106,6 +106,20 @@ cococheck --from "$(git rev-list --reverse main..HEAD | head -n 1)"
 The report of failed commits and the summary are written to standard output. Log messages enabled
 with `--info` or `--debug`, and fatal errors, are written to standard error.
 
+Each rule violation is reported with the name of the rule and, where possible, a snippet of the
+commit message that marks the offending part:
+
+```text
+Commit 82074ea7070689f16ea531373fab9b997ecd69f6 failed:
+
+error[BodyLineLength]: Body line 2 exceeds maximum length of 72 characters (actual: 82).
+  |
+4 | This body line is much too long, way more than seventy-two characters, to show it.
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+When standard output is a terminal, the report is colored.
+
 CoCoCheck exits with status `0` if all commits pass, and with status `1` if any commit fails or an
 error occurs, for example because the repository or a revision cannot be found. This makes it
 suitable for use in CI pipelines and Git hooks.
