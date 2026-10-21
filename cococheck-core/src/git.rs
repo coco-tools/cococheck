@@ -63,13 +63,14 @@ pub fn get_commits(
 
     let to_oid = match to {
         Some(revision) => resolve_revision(&repo, "to", revision)?,
-        None => match repo.head() {
-            Ok(head) => head
-                .target()
-                .ok_or_else(|| git2::Error::from_str("HEAD does not point to a commit"))?,
-            Err(e) if e.code() == ErrorCode::UnbornBranch => return Err(GitError::NoCommits),
-            Err(e) => return Err(e.into()),
-        },
+        None => repo
+            .head()
+            .map_err(|e| match e.code() {
+                ErrorCode::UnbornBranch => GitError::NoCommits,
+                _ => e.into(),
+            })?
+            .peel_to_commit()?
+            .id(),
     };
     let from_oid = match from {
         Some(revision) => {
@@ -116,14 +117,11 @@ fn resolve_revision(
     Ok(commit.id())
 }
 
-fn find_first_commit(repo: &Repository) -> Result<Oid, git2::Error> {
+fn find_first_commit(repo: &Repository) -> Result<Oid, GitError> {
     let mut revwalk = repo.revwalk()?;
     revwalk.push_head()?;
     revwalk.set_sorting(Sort::REVERSE)?;
-    revwalk
-        .next()
-        .transpose()?
-        .ok_or_else(|| git2::Error::from_str("No commits found"))
+    revwalk.next().transpose()?.ok_or(GitError::NoCommits)
 }
 
 fn commits_between_inclusive(
