@@ -15,6 +15,10 @@ struct Cli {
     #[arg(short, long, default_value = ".")]
     input: PathBuf,
 
+    /// Path to the config file (default: cococheck.yml in the repository, if it exists)
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+
     /// Start commit (inclusive, default: first commit)
     #[arg(long)]
     from: Option<String>,
@@ -62,7 +66,7 @@ fn main() -> ExitCode {
 fn run(args: &Cli) -> anyhow::Result<bool> {
     info!("Checking Git repository at: {}", args.input.display());
 
-    let config = load_config_or_default(&args.input)?;
+    let config = load_config_or_default(&args.input, args.config.as_deref())?;
     let range = get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?;
 
     info!(
@@ -139,9 +143,19 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     Ok(failed_commits == 0)
 }
 
-/// Load the config file from the repository at `repo_path`, or use the default configuration if
-/// the repository does not contain one.
-fn load_config_or_default(repo_path: &Path) -> Result<Config, ConfigError> {
+/// Load the config file at `config_path`, or from the repository at `repo_path` if no path is
+/// given. Use the default configuration if no path is given and the repository does not contain a
+/// config file. An explicitly given config file that does not exist is an error.
+fn load_config_or_default(
+    repo_path: &Path,
+    config_path: Option<&Path>,
+) -> Result<Config, ConfigError> {
+    if let Some(config_path) = config_path {
+        let config = load_config(config_path)?;
+        info!("Using config file: {}", config_path.display());
+        return Ok(config);
+    }
+
     let config_path = repo_path.join("cococheck.yml");
     match load_config(&config_path) {
         Ok(config) => {
@@ -161,5 +175,59 @@ fn load_config_or_default(repo_path: &Path) -> Result<Config, ConfigError> {
             Ok(Config::default())
         }
         Err(e) => Err(e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The workspace root, which contains a `cococheck.yml`.
+    fn workspace_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+    }
+
+    /// The CLI crate directory, which does not contain a `cococheck.yml`.
+    fn dir_without_config() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    #[test]
+    fn explicit_config_file_is_loaded() {
+        let config_path = workspace_root().join("cococheck.yml");
+
+        let result = load_config_or_default(&dir_without_config(), Some(&config_path));
+
+        assert!(result.is_ok(), "{result:?}");
+    }
+
+    #[test]
+    fn missing_explicit_config_file_is_an_error() {
+        let config_path = dir_without_config().join("cococheck.yml");
+
+        let result = load_config_or_default(&workspace_root(), Some(&config_path));
+
+        assert!(
+            matches!(
+                result,
+                Err(ConfigError::Io { ref source, .. })
+                    if source.kind() == std::io::ErrorKind::NotFound
+            ),
+            "{result:?}"
+        );
+    }
+
+    #[test]
+    fn implicit_config_file_is_loaded_from_the_repository() {
+        let result = load_config_or_default(&workspace_root(), None);
+
+        assert!(result.is_ok(), "{result:?}");
+    }
+
+    #[test]
+    fn missing_implicit_config_file_falls_back_to_the_default() {
+        let result = load_config_or_default(&dir_without_config(), None);
+
+        assert!(result.is_ok(), "{result:?}");
     }
 }
