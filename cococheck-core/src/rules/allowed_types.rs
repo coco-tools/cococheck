@@ -51,17 +51,17 @@ impl Rule for AllowedTypes {
         self.enabled
     }
 
-    fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
+    fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
         if !self.allowed_types.contains(&commit.commit_type) {
-            Err(vec![RuleError {
+            vec![RuleError {
                 message: format!(
                     "Commit type '{}' is not allowed. Allowed types are: {:?}.",
                     commit.commit_type, self.allowed_types
                 ),
                 span: Some(0..commit.commit_type.len()),
-            }])
+            }]
         } else {
-            Ok(())
+            vec![]
         }
     }
 }

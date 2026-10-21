@@ -31,18 +31,18 @@ impl Rule for NoDescriptionTerminalPunctuation {
         self.enabled
     }
 
-    fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
+    fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
         if commit.description.ends_with('.')
             || commit.description.ends_with('!')
             || commit.description.ends_with('?')
         {
-            Err(vec![RuleError {
+            vec![RuleError {
                 message: "Description should not end with terminal punctuation (., !, ?)."
                     .to_string(),
                 span: Some(commit.header.len() - 1..commit.header.len() - 1),
-            }])
+            }]
         } else {
-            Ok(())
+            vec![]
         }
     }
 }

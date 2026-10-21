@@ -9,7 +9,7 @@ pub struct RuleError {
 pub trait Rule {
     fn name(&self) -> &str;
     fn is_enabled(&self) -> bool;
-    fn check(&self, message: &ConventionalCommit) -> Result<(), Vec<RuleError>>;
+    fn check(&self, message: &ConventionalCommit) -> Vec<RuleError>;
 }
 
 mod rule_set;
