@@ -56,12 +56,33 @@ pub enum ConfigError {
 
     // The parse error is not exposed as a source, because `serde_saphyr::Error` already includes
     // the message of its own source in its `Display` output, so it would be printed twice.
-    #[error("failed to parse configuration: {0}")]
-    Parse(serde_saphyr::Error),
+    #[error("failed to parse configuration: {}", render_parse_error(error, path.as_deref()))]
+    Parse {
+        /// The path of the configuration file, or `None` if the configuration was not read from a
+        /// file.
+        path: Option<PathBuf>,
+        error: Box<serde_saphyr::Error>,
+    },
+}
+
+/// Render a parse error, using `path` as the source name in the snippet instead of the default name.
+fn render_parse_error(error: &serde_saphyr::Error, path: Option<&Path>) -> String {
+    match path {
+        Some(path) => {
+            let source_name = path.display().to_string();
+            error.render_with_options(serde_saphyr::render_options! {
+                source_name: Some(&source_name),
+            })
+        }
+        None => error.render(),
+    }
 }
 
 pub fn parse_config(content: &str) -> Result<Config, ConfigError> {
-    serde_saphyr::from_str(content).map_err(ConfigError::Parse)
+    serde_saphyr::from_str(content).map_err(|error| ConfigError::Parse {
+        path: None,
+        error: Box::new(error),
+    })
 }
 
 pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
@@ -69,7 +90,10 @@ pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
         path: path.to_path_buf(),
         source,
     })?;
-    parse_config(&content)
+    serde_saphyr::from_str(&content).map_err(|error| ConfigError::Parse {
+        path: Some(path.to_path_buf()),
+        error: Box::new(error),
+    })
 }
 
 #[cfg(test)]
@@ -123,7 +147,7 @@ mod tests {
         parser:
           footer_detection: first_paragraph
         "#;
-        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse(_))));
+        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse { .. })));
     }
 
     #[test]
@@ -245,7 +269,7 @@ mod tests {
           unknown_rule:
             enabled: true
         "#;
-        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse(_))));
+        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse { .. })));
     }
 
     #[test]
@@ -271,5 +295,16 @@ mod tests {
         std::fs::write(&path, "rules: {}").unwrap();
 
         assert!(load_config(&path).is_ok());
+    }
+
+    #[test]
+    fn names_the_config_file_in_parse_errors() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("cococheck.yml");
+        std::fs::write(&path, "rules:\n  unknown_rule:\n    enabled: true\n").unwrap();
+
+        let message = load_config(&path).unwrap_err().to_string();
+        assert!(message.contains(&path.display().to_string()));
+        assert!(!message.contains("<input>"));
     }
 }
