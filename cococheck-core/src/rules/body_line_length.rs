@@ -3,22 +3,14 @@ use crate::parser::ConventionalCommit;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct BodyLineLength {
-    #[serde(default = "BodyLineLength::default_max_length")]
     pub max_length: usize,
-}
-
-impl BodyLineLength {
-    fn default_max_length() -> usize {
-        72
-    }
 }
 
 impl Default for BodyLineLength {
     fn default() -> Self {
-        BodyLineLength {
-            max_length: Self::default_max_length(),
-        }
+        BodyLineLength { max_length: 72 }
     }
 }
 

@@ -3,34 +3,20 @@ use crate::rules::{Rule, RuleError};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct AllowedTypes {
-    #[serde(default = "AllowedTypes::default_allowed_types")]
     pub allowed_types: Vec<String>,
-}
-
-impl AllowedTypes {
-    fn default_allowed_types() -> Vec<String> {
-        vec![
-            "build".to_string(),
-            "chore".to_string(),
-            "ci".to_string(),
-            "deps".to_string(),
-            "docs".to_string(),
-            "feat".to_string(),
-            "fix".to_string(),
-            "perf".to_string(),
-            "refactor".to_string(),
-            "revert".to_string(),
-            "style".to_string(),
-            "test".to_string(),
-        ]
-    }
 }
 
 impl Default for AllowedTypes {
     fn default() -> Self {
+        let allowed_types = [
+            "build", "chore", "ci", "deps", "docs", "feat", "fix", "perf", "refactor", "revert",
+            "style", "test",
+        ];
+
         AllowedTypes {
-            allowed_types: Self::default_allowed_types(),
+            allowed_types: allowed_types.iter().map(|t| t.to_string()).collect(),
         }
     }
 }
