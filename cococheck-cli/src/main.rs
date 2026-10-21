@@ -1,7 +1,7 @@
 use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
 use clap::Parser;
 use cococheck_core::config::{Config, ConfigError, load_config};
-use cococheck_core::git::get_commits;
+use cococheck_core::git::{CommitInfo, get_commits};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
 use cococheck_core::rules::RuleSet;
 use log::{LevelFilter, debug, info};
@@ -69,6 +69,21 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     info!("Checking Git repository at: {}", args.input.display());
 
     let config = load_config_or_default(&args.input, args.config.as_deref())?;
+    let commits = collect_commits(args)?;
+
+    let checker = Checker::new(&config);
+    let failed_commits = commits
+        .iter()
+        .filter(|commit| !checker.check(commit))
+        .count();
+
+    print_summary(commits.len(), failed_commits);
+
+    Ok(failed_commits == 0)
+}
+
+/// Collect the commits in the range selected by `args`, ordered from oldest to newest.
+fn collect_commits(args: &Cli) -> anyhow::Result<Vec<CommitInfo>> {
     let range = get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?;
 
     info!(
@@ -79,71 +94,97 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
         range.to,
     );
 
-    let commits = range.commits;
+    Ok(range.commits)
+}
 
-    let rule_set = RuleSet::new(&config);
-    let renderer = if std::io::stdout().is_terminal() {
-        Renderer::styled()
-    } else {
-        Renderer::plain()
-    };
-    let mut failed_commits = 0;
+/// Checks commit messages with the configured parser and rules, and reports the failures.
+struct Checker<'a> {
+    config: &'a Config,
+    rule_set: RuleSet,
+    renderer: Renderer,
+}
 
-    for commit in &commits {
-        let message = &commit.message;
+impl<'a> Checker<'a> {
+    fn new(config: &'a Config) -> Self {
+        let renderer = if std::io::stdout().is_terminal() {
+            Renderer::styled()
+        } else {
+            Renderer::plain()
+        };
 
-        match parse_conventional_commit(message, &config.parser) {
-            Ok(parsed) => {
-                let rule_errors = rule_set.check_commit(&parsed);
-                let failed = rule_errors.iter().any(|(_, errors)| !errors.is_empty());
-
-                if failed {
-                    failed_commits += 1;
-                    println!("Commit {} failed:\n", commit.id);
-                } else {
-                    info!("Commit {} passed.", commit.id);
-                }
-
-                debug!("{:#?}", parsed);
-
-                for (rule_name, errors) in &rule_errors {
-                    if errors.is_empty() {
-                        debug!("  Rule '{}' passed", rule_name);
-                    } else {
-                        for e in errors {
-                            let span = e.span.clone();
-                            let rendered =
-                                render_error(&renderer, Some(rule_name), &e.message, span, message);
-                            println!("{}\n", rendered);
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                failed_commits += 1;
-                println!("Commit {} failed to parse:\n", commit.id);
-                let span = parse_error_span(&e);
-                let rendered = render_error(&renderer, None, &e.to_string(), span, message);
-                println!("{}\n", rendered);
-            }
+        Checker {
+            config,
+            rule_set: RuleSet::new(config),
+            renderer,
         }
     }
 
+    /// Check the message of the `commit` and report its errors. Return whether the commit passed.
+    fn check(&self, commit: &CommitInfo) -> bool {
+        let message = &commit.message;
+
+        let parsed = match parse_conventional_commit(message, &self.config.parser) {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                println!("Commit {} failed to parse:\n", commit.id);
+                let span = parse_error_span(&e);
+                self.print_error(None, &e.to_string(), span, message);
+                return false;
+            }
+        };
+
+        debug!("{:#?}", parsed);
+
+        let rule_errors = self.rule_set.check_commit(&parsed);
+        let failed = rule_errors.iter().any(|(_, errors)| !errors.is_empty());
+
+        if failed {
+            println!("Commit {} failed:\n", commit.id);
+        } else {
+            info!("Commit {} passed.", commit.id);
+        }
+
+        for (rule_name, errors) in &rule_errors {
+            if errors.is_empty() {
+                debug!("  Rule '{}' passed", rule_name);
+            }
+
+            for e in errors {
+                self.print_error(Some(rule_name), &e.message, e.span.clone(), message);
+            }
+        }
+
+        !failed
+    }
+
+    fn print_error(&self, id: Option<&str>, text: &str, span: Option<Range<usize>>, message: &str) {
+        println!(
+            "{}\n",
+            render_error(&self.renderer, id, text, span, message)
+        );
+    }
+}
+
+/// Print how many commits were checked and how many of them failed.
+fn print_summary(checked_commits: usize, failed_commits: usize) {
     println!(
         "CoCoCheck finished checking {} commit{}.",
-        commits.len(),
-        if commits.len() == 1 { "" } else { "s" }
+        checked_commits,
+        plural(checked_commits)
     );
 
     if failed_commits > 0 {
         println!(
             "{} commit{} failed the checks.",
             failed_commits,
-            if failed_commits == 1 { "" } else { "s" }
+            plural(failed_commits)
         );
     }
+}
 
-    Ok(failed_commits == 0)
+/// Return the suffix for the plural of a noun for `count` items.
+fn plural(count: usize) -> &'static str {
+    if count == 1 { "" } else { "s" }
 }
 
 /// Render the error with the `text` as an annotated snippet of the commit `message` that marks the
