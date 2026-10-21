@@ -15,6 +15,7 @@ impl RuleSet {
         rule_set.add(&rules.body_line_length);
         rule_set.add(&rules.header_length);
         rule_set.add(&rules.no_description_terminal_punctuation);
+        rule_set.add(&rules.required_footers);
         rule_set
     }
 
@@ -54,7 +55,8 @@ mod tests {
             vec![
                 "AllowedTypes",
                 "BodyLineLength",
-                "NoDescriptionTerminalPunctuation"
+                "NoDescriptionTerminalPunctuation",
+                "RequiredFooters"
             ]
         );
     }
