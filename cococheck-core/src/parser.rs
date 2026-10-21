@@ -35,11 +35,75 @@ pub struct Footer {
 #[derive(Debug, PartialEq, thiserror::Error)]
 #[non_exhaustive]
 pub enum ParseError {
-    #[error("cannot parse header line '{header}'")]
-    InvalidHeader { header: String },
+    #[error("invalid header: {problem}")]
+    InvalidHeader {
+        header: String,
+        problem: HeaderProblem,
+        /// The byte range in the full commit message that the problem refers to.
+        span: Range<usize>,
+    },
 
     #[error("the line after the header must be empty")]
     MissingBlankLineAfterHeader,
+}
+
+/// The reason why a header does not have the form `type(scope)!: description`.
+#[derive(Debug, PartialEq)]
+#[non_exhaustive]
+pub enum HeaderProblem {
+    Empty,
+    LeadingWhitespace,
+    MissingType,
+    InvalidTypeCharacter(char),
+    UnclosedScope,
+    EmptyScope,
+    /// The header part after which `: ` was expected, but not found.
+    MissingColon(HeaderPart),
+    WhitespaceBeforeColon,
+    MissingSpaceAfterColon,
+    MissingDescription,
+}
+
+impl std::fmt::Display for HeaderProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HeaderProblem::Empty => write!(f, "the header is empty"),
+            HeaderProblem::LeadingWhitespace => {
+                write!(f, "the header must not start with whitespace")
+            }
+            HeaderProblem::MissingType => write!(f, "the header must start with a type"),
+            HeaderProblem::InvalidTypeCharacter(c) => write!(
+                f,
+                "the type must only contain letters, digits and underscores, but contains '{c}'"
+            ),
+            HeaderProblem::UnclosedScope => {
+                write!(f, "the scope is missing a closing parenthesis")
+            }
+            HeaderProblem::EmptyScope => write!(f, "the scope must not be empty"),
+            HeaderProblem::MissingColon(part) => write!(f, "expected ': ' after {part}"),
+            HeaderProblem::WhitespaceBeforeColon => write!(f, "unexpected whitespace before ':'"),
+            HeaderProblem::MissingSpaceAfterColon => write!(f, "expected a space after ':'"),
+            HeaderProblem::MissingDescription => write!(f, "the description must not be empty"),
+        }
+    }
+}
+
+/// A part of the header before the `: ` separator.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum HeaderPart {
+    Type,
+    Scope,
+    BreakingChangeMarker,
+}
+
+impl std::fmt::Display for HeaderPart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HeaderPart::Type => write!(f, "the type"),
+            HeaderPart::Scope => write!(f, "the scope"),
+            HeaderPart::BreakingChangeMarker => write!(f, "'!'"),
+        }
+    }
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
@@ -73,8 +137,11 @@ pub fn parse_conventional_commit(
         regex!(r"^(?P<type>\w+)(\((?P<scope>[^)]+)\))?(?P<breaking>!)?: (?P<desc>.+)$");
 
     let Some(caps) = header_regex.captures(header_line) else {
+        let (problem, span) = diagnose_header(header_line);
         return Err(ParseError::InvalidHeader {
             header: header_line.to_string(),
+            problem,
+            span,
         });
     };
 
@@ -176,6 +243,72 @@ pub fn parse_conventional_commit(
         body_lines,
         footer: footers,
     })
+}
+
+/// Find out why `header` does not match the header pattern, and return the problem with the byte
+/// range in the header that it refers to. As the header is the first line of the message, the range
+/// is also a range in the full message.
+fn diagnose_header(header: &str) -> (HeaderProblem, Range<usize>) {
+    let char_span = |pos: usize| pos..pos + header[pos..].chars().next().map_or(0, char::len_utf8);
+
+    if header.is_empty() {
+        return (HeaderProblem::Empty, 0..0);
+    }
+
+    let indent = header.len() - header.trim_start().len();
+    if indent > 0 {
+        return (HeaderProblem::LeadingWhitespace, 0..indent);
+    }
+
+    let mut pos = regex!(r"^\w*").find(header).map_or(0, |m| m.end());
+    if pos == 0 {
+        return (HeaderProblem::MissingType, char_span(0));
+    }
+
+    let mut previous = HeaderPart::Type;
+
+    if header[pos..].starts_with('(') {
+        let Some(close) = header[pos..].find(')') else {
+            return (HeaderProblem::UnclosedScope, pos..header.len());
+        };
+
+        if close == 1 {
+            return (HeaderProblem::EmptyScope, pos..pos + 2);
+        }
+
+        pos += close + 1;
+        previous = HeaderPart::Scope;
+    }
+
+    if header[pos..].starts_with('!') {
+        pos += 1;
+        previous = HeaderPart::BreakingChangeMarker;
+    }
+
+    let rest = &header[pos..];
+
+    if let Some(after_colon) = rest.strip_prefix(':') {
+        // A colon followed by a space and a description matches the header pattern, so if there is
+        // a description, the space is missing.
+        let problem = if after_colon.trim().is_empty() {
+            HeaderProblem::MissingDescription
+        } else {
+            HeaderProblem::MissingSpaceAfterColon
+        };
+        return (problem, pos..pos + 1);
+    }
+
+    let whitespace = rest.len() - rest.trim_start().len();
+    if whitespace > 0 && rest[whitespace..].starts_with(':') {
+        return (HeaderProblem::WhitespaceBeforeColon, pos..pos + whitespace);
+    }
+
+    match rest.chars().next() {
+        Some(c) if previous == HeaderPart::Type && !c.is_whitespace() => {
+            (HeaderProblem::InvalidTypeCharacter(c), char_span(pos))
+        }
+        _ => (HeaderProblem::MissingColon(previous), char_span(pos)),
+    }
 }
 
 /// Split the lines into paragraphs separated by one or more empty lines. Trailing whitespace is
@@ -516,8 +649,98 @@ mod tests {
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()),
             Err(ParseError::InvalidHeader {
-                header: "invalid commit message format".to_string()
+                header: "invalid commit message format".to_string(),
+                problem: HeaderProblem::MissingColon(HeaderPart::Type),
+                span: 7..8,
             })
+        );
+    }
+
+    /// Return the problem of the invalid `header` and the text that its span refers to.
+    fn header_problem(header: &str) -> (HeaderProblem, &str) {
+        match parse_conventional_commit(header, &ParserConfig::default()) {
+            Err(ParseError::InvalidHeader { problem, span, .. }) => (problem, &header[span]),
+            result => panic!("expected an invalid header, got {result:?}"),
+        }
+    }
+
+    #[test]
+    fn explains_why_a_header_is_invalid() {
+        use HeaderProblem::*;
+
+        let cases = [
+            ("", Empty, ""),
+            ("Upgrade Kotlin to 1.8", MissingColon(HeaderPart::Type), " "),
+            ("Upgrade", MissingColon(HeaderPart::Type), ""),
+            (": add new feature", MissingType, ":"),
+            ("(core): add new feature", MissingType, "("),
+            (
+                "docker-compose: add new feature",
+                InvalidTypeCharacter('-'),
+                "-",
+            ),
+            ("README.md: add new feature", InvalidTypeCharacter('.'), "."),
+            ("feat(): add new feature", EmptyScope, "()"),
+            (
+                "feat(core: add new feature",
+                UnclosedScope,
+                "(core: add new feature",
+            ),
+            (
+                "fix(core)): add new feature",
+                MissingColon(HeaderPart::Scope),
+                ")",
+            ),
+            (
+                "feat(core) add new feature",
+                MissingColon(HeaderPart::Scope),
+                " ",
+            ),
+            (
+                "feat! add new feature",
+                MissingColon(HeaderPart::BreakingChangeMarker),
+                " ",
+            ),
+            (
+                "feat!(core): add new feature",
+                MissingColon(HeaderPart::BreakingChangeMarker),
+                "(",
+            ),
+            ("dao : add new feature", WhitespaceBeforeColon, " "),
+            (
+                "feat(core) \t: add new feature",
+                WhitespaceBeforeColon,
+                " \t",
+            ),
+            ("feat:add new feature", MissingSpaceAfterColon, ":"),
+            ("feat(core)!:add new feature", MissingSpaceAfterColon, ":"),
+            ("feat:", MissingDescription, ":"),
+            ("feat(core):   ", MissingDescription, ":"),
+        ];
+
+        for (header, problem, text) in cases {
+            assert_eq!(
+                header_problem(header),
+                (problem, text),
+                "header: {header:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn reports_spans_of_multi_byte_characters_in_headers() {
+        assert_eq!(
+            header_problem("feat→: add new feature"),
+            (HeaderProblem::InvalidTypeCharacter('→'), "→")
+        );
+    }
+
+    #[test]
+    fn displays_the_header_problem() {
+        let error = parse_conventional_commit("feat(): add", &ParserConfig::default()).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "invalid header: the scope must not be empty"
         );
     }
 
@@ -527,7 +750,9 @@ mod tests {
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()),
             Err(ParseError::InvalidHeader {
-                header: "  feat: add new feature".to_string()
+                header: "  feat: add new feature".to_string(),
+                problem: HeaderProblem::LeadingWhitespace,
+                span: 0..2,
             })
         );
     }
