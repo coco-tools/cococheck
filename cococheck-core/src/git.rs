@@ -1,3 +1,4 @@
+use crate::message::{CleanupMode, MessageCleanup};
 use git2::{ErrorCode, Oid, Repository, Sort};
 use std::path::Path;
 
@@ -94,6 +95,43 @@ pub fn get_commits(
         to: to_oid.to_string(),
         commits,
     })
+}
+
+/// Return how Git cleans up commit messages edited in the repository at `repo_path`, as configured
+/// by `commit.cleanup`, and `core.commentString` or `core.commentChar`. If the repository cannot be
+/// opened, use the global Git configuration. Use the defaults for settings that are not set or
+/// invalid, or if the configuration cannot be read. The comment string `auto` is also replaced by
+/// the default `#`, because the comment character that Git chooses in that case cannot be
+/// determined afterwards.
+pub fn message_cleanup(repo_path: &Path) -> MessageCleanup {
+    let config = match Repository::open(repo_path) {
+        Ok(repo) => repo.config(),
+        Err(_) => git2::Config::open_default(),
+    };
+
+    match config {
+        Ok(config) => configured_message_cleanup(&config),
+        Err(_) => MessageCleanup::default(),
+    }
+}
+
+fn configured_message_cleanup(config: &git2::Config) -> MessageCleanup {
+    let default = MessageCleanup::default();
+
+    let mode = match config.get_string("commit.cleanup").as_deref() {
+        Ok("scissors") => CleanupMode::Scissors,
+        Ok("whitespace") => CleanupMode::Whitespace,
+        Ok("verbatim") => CleanupMode::Verbatim,
+        _ => default.mode,
+    };
+
+    let comment = ["core.commentString", "core.commentChar"]
+        .iter()
+        .find_map(|name| config.get_string(name).ok())
+        .filter(|comment| !comment.is_empty() && comment != "auto")
+        .unwrap_or(default.comment);
+
+    MessageCleanup { mode, comment }
 }
 
 fn resolve_revision(
@@ -194,6 +232,62 @@ mod tests {
             oids.push(commit(repo, message, &parents));
         }
         oids
+    }
+
+    fn cleanup_from(config: &str) -> MessageCleanup {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config");
+        std::fs::write(&path, config).unwrap();
+        configured_message_cleanup(&git2::Config::open(&path).unwrap())
+    }
+
+    #[test]
+    fn uses_the_default_cleanup_if_nothing_is_configured() {
+        assert_eq!(cleanup_from(""), MessageCleanup::default());
+    }
+
+    #[test]
+    fn reads_the_comment_char() {
+        let cleanup = cleanup_from("[core]\n\tcommentChar = \";\"\n");
+        assert_eq!(cleanup.comment, ";");
+    }
+
+    #[test]
+    fn prefers_the_comment_string_over_the_comment_char() {
+        let cleanup = cleanup_from("[core]\n\tcommentChar = \";\"\n\tcommentString = //\n");
+        assert_eq!(cleanup.comment, "//");
+    }
+
+    #[test]
+    fn ignores_an_automatic_comment_char() {
+        let cleanup = cleanup_from("[core]\n\tcommentChar = auto\n");
+        assert_eq!(cleanup.comment, "#");
+    }
+
+    #[test]
+    fn reads_the_cleanup_mode() {
+        let mode = |value: &str| cleanup_from(&format!("[commit]\n\tcleanup = {value}\n")).mode;
+        assert_eq!(mode("strip"), CleanupMode::Strip);
+        assert_eq!(mode("default"), CleanupMode::Strip);
+        assert_eq!(mode("scissors"), CleanupMode::Scissors);
+        assert_eq!(mode("whitespace"), CleanupMode::Whitespace);
+        assert_eq!(mode("verbatim"), CleanupMode::Verbatim);
+        assert_eq!(mode("invalid"), CleanupMode::Strip);
+    }
+
+    #[test]
+    fn reads_the_cleanup_from_the_repository() {
+        let (dir, repo) = init_repo();
+        let mut config = repo.config().unwrap();
+        config.set_str("core.commentChar", "%").unwrap();
+        config.set_str("commit.cleanup", "scissors").unwrap();
+        assert_eq!(
+            message_cleanup(dir.path()),
+            MessageCleanup {
+                mode: CleanupMode::Scissors,
+                comment: "%".to_string(),
+            }
+        );
     }
 
     fn messages(range: &CommitRange) -> Vec<&str> {

@@ -1,11 +1,12 @@
 use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
+use anyhow::Context;
 use clap::Parser;
 use cococheck_core::config::{Config, ConfigError, load_config};
-use cococheck_core::git::{CommitInfo, get_commits};
+use cococheck_core::git::{get_commits, message_cleanup};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
 use cococheck_core::rules::{RuleSet, Severity};
 use log::{LevelFilter, debug, info};
-use std::io::{IsTerminal, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -28,6 +29,10 @@ struct Cli {
     /// End commit (inclusive, default: HEAD)
     #[arg(long)]
     to: Option<String>,
+
+    /// Check only the commit message in this file ("-" for stdin), e.g. in a commit-msg hook
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["from", "to"])]
+    message_file: Option<PathBuf>,
 
     /// Enable info logging
     #[arg(long)]
@@ -64,23 +69,37 @@ fn main() -> ExitCode {
     }
 }
 
-/// Check the commits selected by `args`. Return whether all commits passed the checks.
+/// Check the commit messages selected by `args`. Return whether all messages passed the checks.
 fn run(args: &Cli) -> anyhow::Result<bool> {
     info!("Checking Git repository at: {}", args.input.display());
 
     let config = load_config_or_default(&args.input, args.config.as_deref())?;
-    let commits = collect_commits(args)?;
+    let messages = match &args.message_file {
+        Some(path) => vec![read_message_file(&args.input, path)?],
+        None => collect_commits(args)?,
+    };
 
     let checker = Checker::new(&config);
-    let outcomes: Vec<Outcome> = commits.iter().map(|commit| checker.check(commit)).collect();
+    let outcomes: Vec<Outcome> = messages
+        .iter()
+        .map(|message| checker.check(message))
+        .collect();
 
     print_summary(&outcomes);
 
     Ok(!outcomes.contains(&Outcome::Failed))
 }
 
-/// Collect the commits in the range selected by `args`, ordered from oldest to newest.
-fn collect_commits(args: &Cli) -> anyhow::Result<Vec<CommitInfo>> {
+/// A commit message to check.
+struct Message {
+    /// The name that refers to the message in the report.
+    name: String,
+    text: String,
+}
+
+/// Collect the messages of the commits in the range selected by `args`, ordered from oldest to
+/// newest.
+fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
     let range = get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?;
 
     info!(
@@ -91,7 +110,38 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<CommitInfo>> {
         range.to,
     );
 
-    Ok(range.commits)
+    let messages = range
+        .commits
+        .into_iter()
+        .map(|commit| Message {
+            name: format!("Commit {}", commit.id),
+            text: commit.message,
+        })
+        .collect();
+
+    Ok(messages)
+}
+
+/// Read the commit message from the file at `path`, or from standard input if the path is `-`, and
+/// clean it up like Git does, as configured for the repository at `repo_path`.
+fn read_message_file(repo_path: &Path, path: &Path) -> anyhow::Result<Message> {
+    let mut bytes = Vec::new();
+    if path == Path::new("-") {
+        std::io::stdin()
+            .read_to_end(&mut bytes)
+            .context("failed to read the commit message from standard input")?;
+    } else {
+        bytes = std::fs::read(path)
+            .with_context(|| format!("failed to read commit message file '{}'", path.display()))?;
+    }
+
+    let cleanup = message_cleanup(repo_path);
+    debug!("Cleaning up the commit message with {:?}.", cleanup);
+
+    Ok(Message {
+        name: "Commit message".to_string(),
+        text: cleanup.clean(&String::from_utf8_lossy(&bytes)),
+    })
 }
 
 /// The outcome of checking a single commit.
@@ -132,19 +182,20 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// Check the message of the `commit` and report its errors and warnings.
-    fn check(&self, commit: &CommitInfo) -> Outcome {
-        let message = &commit.message;
+    /// Check the `message` and report its errors and warnings.
+    fn check(&self, message: &Message) -> Outcome {
+        let name = &message.name;
+        let message = &message.text;
 
         if self.config.is_ignored(message) {
-            info!("Commit {} is ignored.", commit.id);
+            info!("{} is ignored.", name);
             return Outcome::Ignored;
         }
 
         let parsed = match parse_conventional_commit(message, &self.config.parser) {
             Ok(parsed) => parsed,
             Err(e) => {
-                println!("Commit {} failed to parse:\n", commit.id);
+                println!("{} failed to parse:\n", name);
                 let span = parse_error_span(&e);
                 self.print_error(Severity::Error, None, &e.to_string(), span, message);
                 return Outcome::Failed;
@@ -161,13 +212,13 @@ impl<'a> Checker<'a> {
         };
 
         let outcome = if has_violations(Severity::Error) {
-            println!("Commit {} failed:\n", commit.id);
+            println!("{} failed:\n", name);
             Outcome::Failed
         } else if has_violations(Severity::Warning) {
-            println!("Commit {} passed with warnings:\n", commit.id);
+            println!("{} passed with warnings:\n", name);
             Outcome::PassedWithWarnings
         } else {
-            info!("Commit {} passed.", commit.id);
+            info!("{} passed.", name);
             Outcome::Passed
         };
 
