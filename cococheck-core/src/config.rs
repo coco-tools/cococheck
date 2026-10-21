@@ -4,7 +4,7 @@ use crate::rules::{
     NoDescriptionTerminalPunctuation,
 };
 use serde::{Deserialize, Deserializer};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,8 +47,11 @@ where
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    #[error("failed to read configuration file")]
-    Io(#[source] std::io::Error),
+    #[error("failed to read configuration file '{}'", path.display())]
+    Io {
+        path: PathBuf,
+        source: std::io::Error,
+    },
 
     // The parse error is not exposed as a source, because `serde_saphyr::Error` already includes
     // the message of its own source in its `Display` output, so it would be printed twice.
@@ -61,7 +64,10 @@ pub fn parse_config(content: &str) -> Result<Config, ConfigError> {
 }
 
 pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
-    let content = std::fs::read_to_string(path).map_err(ConfigError::Io)?;
+    let content = std::fs::read_to_string(path).map_err(|source| ConfigError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
     parse_config(&content)
 }
 

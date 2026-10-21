@@ -154,7 +154,9 @@ fn load_config_or_default(repo_path: &Path) -> Result<Config, ConfigError> {
             );
             Ok(config)
         }
-        Err(ConfigError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound => {
+        Err(ConfigError::Io { ref source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
             info!("No config file found, using default configuration.");
             Ok(Config::default())
         }
