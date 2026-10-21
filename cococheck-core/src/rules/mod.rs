@@ -4,6 +4,7 @@ use serde::Deserialize;
 #[derive(Debug, PartialEq)]
 pub struct RuleError {
     pub message: String,
+    /// The byte range in the full commit message that the error refers to.
     pub span: Option<std::ops::Range<usize>>,
 }
 
