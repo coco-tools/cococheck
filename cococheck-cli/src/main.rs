@@ -2,10 +2,11 @@ use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
 use clap::Parser;
 use cococheck_core::config::{Config, ConfigError, load_config};
 use cococheck_core::git::get_commits;
-use cococheck_core::parser::parse_conventional_commit;
-use cococheck_core::rules::{RuleError, RuleSet};
+use cococheck_core::parser::{ParseError, parse_conventional_commit};
+use cococheck_core::rules::RuleSet;
 use log::{LevelFilter, debug, info};
 use std::io::{IsTerminal, Write};
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -110,14 +111,20 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
                         debug!("  Rule '{}' passed", rule_name);
                     } else {
                         for e in errors {
-                            println!("{}\n", render_error(&renderer, rule_name, e, message));
+                            let span = e.span.clone();
+                            let rendered =
+                                render_error(&renderer, Some(rule_name), &e.message, span, message);
+                            println!("{}\n", rendered);
                         }
                     }
                 }
             }
             Err(e) => {
                 failed_commits += 1;
-                println!("Commit {} failed to parse: {}", commit.id, e);
+                println!("Commit {} failed to parse:\n", commit.id);
+                let span = parse_error_span(&e);
+                let rendered = render_error(&renderer, None, &e.to_string(), span, message);
+                println!("{}\n", rendered);
             }
         }
     }
@@ -139,18 +146,37 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     Ok(failed_commits == 0)
 }
 
-/// Render the `error` reported by the rule named `rule_name` as an annotated snippet of the commit
-/// `message`.
-fn render_error(renderer: &Renderer, rule_name: &str, error: &RuleError, message: &str) -> String {
-    let title = Level::ERROR.primary_title(&error.message).id(rule_name);
-    let group = match &error.span {
-        Some(span) => title.element(
-            Snippet::source(message).annotation(AnnotationKind::Primary.span(span.clone())),
-        ),
+/// Render the error with the `text` as an annotated snippet of the commit `message` that marks the
+/// `span`. The `id` is the name of the rule that reported the error, if any.
+fn render_error(
+    renderer: &Renderer,
+    id: Option<&str>,
+    text: &str,
+    span: Option<Range<usize>>,
+    message: &str,
+) -> String {
+    let title = Level::ERROR.primary_title(text);
+    let title = match id {
+        Some(id) => title.id(id),
+        None => title,
+    };
+    let group = match span {
+        Some(span) => {
+            title.element(Snippet::source(message).annotation(AnnotationKind::Primary.span(span)))
+        }
         None => Group::with_title(title),
     };
 
     renderer.render(&[group])
+}
+
+/// Return the byte range in the commit message that the parse `error` refers to.
+fn parse_error_span(error: &ParseError) -> Option<Range<usize>> {
+    match error {
+        ParseError::InvalidHeader { span, .. }
+        | ParseError::MissingBlankLineAfterHeader { span } => Some(span.clone()),
+        _ => None,
+    }
 }
 
 /// Load the config file at `config_path`, or from the repository at `repo_path` if no path is
