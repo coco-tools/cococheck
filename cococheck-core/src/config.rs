@@ -46,6 +46,7 @@ where
 }
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ConfigError {
     #[error("failed to read configuration file '{}'", path.display())]
     Io {
