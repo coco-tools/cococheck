@@ -4,7 +4,6 @@ use crate::rules::{
     NoDescriptionTerminalPunctuation,
 };
 use serde::{Deserialize, Deserializer};
-use std::fmt;
 use std::path::Path;
 
 #[derive(Debug, Default, Deserialize)]
@@ -46,19 +45,15 @@ where
     Option::<T>::deserialize(deserializer).map(Option::unwrap_or_default)
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    Io(std::io::Error),
-    Parse(serde_saphyr::Error),
-}
+    #[error("failed to read configuration file")]
+    Io(#[source] std::io::Error),
 
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConfigError::Io(e) => write!(f, "Failed to read configuration file: {}", e),
-            ConfigError::Parse(e) => write!(f, "Failed to parse configuration: {}", e),
-        }
-    }
+    // The parse error is not exposed as a source, because `serde_saphyr::Error` already includes
+    // the message of its own source in its `Display` output, so it would be printed twice.
+    #[error("failed to parse configuration: {0}")]
+    Parse(serde_saphyr::Error),
 }
 
 pub fn parse_config(content: &str) -> Result<Config, ConfigError> {

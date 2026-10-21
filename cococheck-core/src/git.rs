@@ -1,5 +1,4 @@
 use git2::{ErrorCode, Oid, Repository, Sort};
-use std::fmt;
 use std::path::Path;
 
 #[derive(Debug, PartialEq)]
@@ -15,46 +14,29 @@ pub struct CommitRange {
     pub commits: Vec<CommitInfo>,
 }
 
-#[derive(Debug)]
+// The git2 errors are not exposed as sources, but only their messages are included, because the
+// `Display` implementation of `git2::Error` appends the error class and code, which are not helpful
+// for users.
+#[derive(Debug, thiserror::Error)]
 pub enum GitError {
+    #[error("failed to open repository: {}", .0.message())]
     OpenRepository(git2::Error),
+
+    #[error("the '{name}' revision '{revision}' could not be found: {}", .error.message())]
     RevisionNotFound {
         name: &'static str,
         revision: String,
-        source: git2::Error,
+        error: git2::Error,
     },
-    NoCommits,
-    NotAnAncestor {
-        from: String,
-        to: String,
-    },
-    Git(git2::Error),
-}
 
-impl fmt::Display for GitError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            GitError::OpenRepository(e) => write!(f, "Failed to open repository: {}", e.message()),
-            GitError::RevisionNotFound {
-                name,
-                revision,
-                source,
-            } => write!(
-                f,
-                "The '{}' revision '{}' could not be found: {}",
-                name,
-                revision,
-                source.message()
-            ),
-            GitError::NoCommits => write!(f, "The repository does not contain any commits."),
-            GitError::NotAnAncestor { from, to } => write!(
-                f,
-                "The 'from' revision '{}' is not an ancestor of the 'to' revision '{}'.",
-                from, to
-            ),
-            GitError::Git(e) => write!(f, "Failed to read commits: {}", e.message()),
-        }
-    }
+    #[error("the repository does not contain any commits")]
+    NoCommits,
+
+    #[error("the 'from' revision '{from}' is not an ancestor of the 'to' revision '{to}'")]
+    NotAnAncestor { from: String, to: String },
+
+    #[error("failed to read commits: {}", .0.message())]
+    Git(git2::Error),
 }
 
 impl From<git2::Error> for GitError {
@@ -113,10 +95,10 @@ fn resolve_revision(
 ) -> Result<Oid, GitError> {
     let object = repo
         .revparse_single(revision)
-        .map_err(|source| GitError::RevisionNotFound {
+        .map_err(|error| GitError::RevisionNotFound {
             name,
             revision: revision.to_string(),
-            source,
+            error,
         })?;
 
     // Peel the object to get the commit an annotated tag points to.
