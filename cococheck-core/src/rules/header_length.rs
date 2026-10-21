@@ -39,32 +39,37 @@ impl Rule for HeaderLength {
 mod tests {
     use super::*;
     use crate::parser::{ParserConfig, parse_conventional_commit};
+    use pretty_assertions::assert_eq;
+
+    fn check(rule: &HeaderLength, message: &str) -> Vec<RuleError> {
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+        rule.check(&commit)
+    }
 
     #[test]
     fn succeeds_for_valid_length() {
-        let commit =
-            parse_conventional_commit("feat: add new feature", &ParserConfig::default()).unwrap();
         let rule = HeaderLength { max_length: 50 };
-        assert!(rule.check(&commit).is_empty());
+        assert!(check(&rule, "feat: add new feature").is_empty());
     }
 
     #[test]
     fn counts_characters_instead_of_bytes() {
         // 20 characters, but 23 bytes in UTF-8.
-        let commit =
-            parse_conventional_commit("feat: Größenänderung", &ParserConfig::default()).unwrap();
         let rule = HeaderLength { max_length: 20 };
-        assert!(rule.check(&commit).is_empty());
+        assert!(check(&rule, "feat: Größenänderung").is_empty());
     }
 
     #[test]
     fn fails_when_header_exceeds_max_length() {
-        let long_commit = parse_conventional_commit(
-            "feat: this is a very long header that exceeds the maximum length",
-            &ParserConfig::default(),
-        )
-        .unwrap();
+        let message = "feat: this is a very long header that exceeds the maximum length\n\nBody.";
         let rule = HeaderLength { max_length: 30 };
-        assert_eq!(rule.check(&long_commit).len(), 1);
+
+        assert_eq!(
+            check(&rule, message),
+            vec![RuleError {
+                message: "Header exceeds maximum length of 30 characters (actual: 64).".to_string(),
+                span: Some(0..64),
+            }]
+        );
     }
 }

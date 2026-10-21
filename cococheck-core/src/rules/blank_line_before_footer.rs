@@ -11,25 +11,26 @@ impl Rule for BlankLineBeforeFooter {
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
-        let Some(body) = &commit.body else {
-            return vec![];
-        };
+        let lines = &commit.body_lines;
 
         // Footers that are not separated from the body by a blank line are parsed as part of the
         // last body paragraph, so only check that paragraph to not report prose like "Note: ...".
-        let last_paragraph = body.rsplit("\n\n").next().unwrap_or(body);
-        let first_footer_line = last_paragraph
-            .lines()
+        let last_paragraph_start = lines
+            .iter()
+            .rposition(|line| line.text.is_empty())
+            .map_or(0, |i| i + 1);
+        let first_footer_line = lines[last_paragraph_start..]
+            .iter()
             .skip(1)
-            .find(|line| parse_footer_line(line).is_some());
+            .find(|line| parse_footer_line(&line.text).is_some());
 
         match first_footer_line {
             Some(line) => vec![RuleError {
                 message: format!(
                     "The footer '{}' must be separated from the body by a blank line.",
-                    line
+                    line.text
                 ),
-                span: Some(0..line.len()),
+                span: Some(line.span.clone()),
             }],
             None => vec![],
         }
@@ -80,14 +81,17 @@ mod tests {
             vec![RuleError {
                 message: "The footer 'Refs: #1' must be separated from the body by a blank line."
                     .to_string(),
-                span: Some(0..8),
+                span: Some(41..49),
             }]
         );
     }
 
     #[test]
     fn fails_for_footer_without_blank_line_in_last_body_paragraph() {
-        let result = check("feat: add new feature\n\nIntro.\n\nThis is the body.\nFixes #123");
+        let message = "feat: add new feature\n\nIntro.\n\nThis is the body.\nFixes #123";
+        let result = check(message);
         assert_eq!(result.len(), 1);
+        assert_eq!(result[0].span, Some(49..59));
+        assert_eq!(&message[49..59], "Fixes #123");
     }
 }
