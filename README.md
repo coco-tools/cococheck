@@ -162,6 +162,7 @@ rules:
   body_line_length:
     enabled: true
     max_length: 72
+    ignore_urls: true
   header_length:
     enabled: true
     max_length: 72
@@ -236,10 +237,14 @@ Refs: #123
 
 Limits the length of each line in the body. Lengths are counted in Unicode characters, not bytes.
 
-| Setting      | Description                                | Default |
-|--------------|--------------------------------------------|---------|
-| `enabled`    | Whether the rule is applied.               | `true`  |
-| `max_length` | The maximum number of characters per line. | `72`    |
+Long URLs cannot be wrapped, so by default lines that contain a URL starting with `http://` or
+`https://` are not checked, as in commitlint.
+
+| Setting       | Description                                   | Default |
+|---------------|-----------------------------------------------|---------|
+| `enabled`     | Whether the rule is applied.                  | `true`  |
+| `max_length`  | The maximum number of characters per line.    | `72`    |
+| `ignore_urls` | Whether lines that contain a URL are skipped. | `true`  |
 
 #### `header_length`
 
