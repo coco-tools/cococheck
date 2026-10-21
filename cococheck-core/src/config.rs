@@ -1,7 +1,7 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
     AllowedTypes, BlankLineBeforeFooter, BodyLineLength, HeaderLength,
-    NoDescriptionTerminalPunctuation, RuleConfig,
+    NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig,
 };
 use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
@@ -33,6 +33,9 @@ pub struct RulesConfig {
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub no_description_terminal_punctuation: RuleConfig<NoDescriptionTerminalPunctuation>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub required_footers: RuleConfig<RequiredFooters>,
 }
 
 /// Deserialize a YAML null value, like an empty `rules:` key, as the default value, instead of
@@ -113,6 +116,7 @@ mod tests {
             config.rules.no_description_terminal_punctuation,
             RuleConfig::default()
         );
+        assert_eq!(config.rules.required_footers, RuleConfig::default());
     }
 
     #[test]
@@ -164,6 +168,7 @@ mod tests {
             config.rules.no_description_terminal_punctuation,
             RuleConfig::default()
         );
+        assert_eq!(config.rules.required_footers, RuleConfig::default());
     }
 
     #[test]
@@ -258,6 +263,25 @@ mod tests {
             RuleConfig {
                 enabled: false,
                 rule: NoDescriptionTerminalPunctuation {},
+            }
+        );
+    }
+
+    #[test]
+    fn read_required_footers() {
+        let yaml = r#"
+        rules:
+          required_footers:
+            tokens: [Signed-off-by]
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.required_footers,
+            RuleConfig {
+                enabled: true,
+                rule: RequiredFooters {
+                    tokens: vec!["Signed-off-by".to_string()]
+                },
             }
         );
     }

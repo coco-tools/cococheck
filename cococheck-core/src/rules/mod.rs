@@ -53,3 +53,6 @@ pub use header_length::HeaderLength;
 
 mod no_description_terminal_punctuation;
 pub use no_description_terminal_punctuation::NoDescriptionTerminalPunctuation;
+
+mod required_footers;
+pub use required_footers::RequiredFooters;

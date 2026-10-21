@@ -167,6 +167,9 @@ rules:
     max_length: 72
   no_description_terminal_punctuation:
     enabled: true
+  required_footers:
+    enabled: true
+    tokens: []
 ```
 
 ### Message structure
@@ -255,6 +258,26 @@ question mark.
 | Setting   | Description                  | Default |
 |-----------|------------------------------|---------|
 | `enabled` | Whether the rule is applied. | `true`  |
+
+#### `required_footers`
+
+Requires every commit to have a footer with each of the configured tokens, for example a
+`Signed-off-by` footer for the [Developer Certificate of Origin](https://developercertificate.org/):
+
+```yaml
+rules:
+  required_footers:
+    tokens: [Signed-off-by]
+```
+
+Tokens are compared case-insensitively, except for `BREAKING CHANGE` and `BREAKING-CHANGE`, which
+must be uppercase. A footer line in the body, for example because it is not separated from the body
+by a blank line, does not count.
+
+| Setting   | Description                                    | Default |
+|-----------|------------------------------------------------|---------|
+| `enabled` | Whether the rule is applied.                   | `true`  |
+| `tokens`  | The tokens of the footers that are required.   | `[]`    |
 
 ## Project layout
 
