@@ -1,7 +1,7 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
     AllowedTypes, BlankLineBeforeFooter, BodyLineLength, HeaderLength,
-    NoDescriptionTerminalPunctuation,
+    NoDescriptionTerminalPunctuation, RuleConfig,
 };
 use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
@@ -20,19 +20,19 @@ pub struct Config {
 #[serde(deny_unknown_fields)]
 pub struct RulesConfig {
     #[serde(default, deserialize_with = "null_as_default")]
-    pub allowed_types: AllowedTypes,
+    pub allowed_types: RuleConfig<AllowedTypes>,
 
     #[serde(default, deserialize_with = "null_as_default")]
-    pub blank_line_before_footer: BlankLineBeforeFooter,
+    pub blank_line_before_footer: RuleConfig<BlankLineBeforeFooter>,
 
     #[serde(default, deserialize_with = "null_as_default")]
-    pub body_line_length: BodyLineLength,
+    pub body_line_length: RuleConfig<BodyLineLength>,
 
     #[serde(default, deserialize_with = "null_as_default")]
-    pub header_length: HeaderLength,
+    pub header_length: RuleConfig<HeaderLength>,
 
     #[serde(default, deserialize_with = "null_as_default")]
-    pub no_description_terminal_punctuation: NoDescriptionTerminalPunctuation,
+    pub no_description_terminal_punctuation: RuleConfig<NoDescriptionTerminalPunctuation>,
 }
 
 /// Deserialize a YAML null value, like an empty `rules:` key, as the default value, instead of
@@ -81,16 +81,13 @@ mod tests {
     #[test]
     fn read_default_config_for_empty_config() {
         let config = parse_config("").unwrap();
-        assert_eq!(config.rules.allowed_types, AllowedTypes::default());
-        assert_eq!(
-            config.rules.blank_line_before_footer,
-            BlankLineBeforeFooter::default()
-        );
-        assert_eq!(config.rules.body_line_length, BodyLineLength::default());
-        assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(config.rules.allowed_types, RuleConfig::default());
+        assert_eq!(config.rules.blank_line_before_footer, RuleConfig::default());
+        assert_eq!(config.rules.body_line_length, RuleConfig::default());
+        assert_eq!(config.rules.header_length, RuleConfig::default());
         assert_eq!(
             config.rules.no_description_terminal_punctuation,
-            NoDescriptionTerminalPunctuation::default()
+            RuleConfig::default()
         );
     }
 
@@ -135,16 +132,13 @@ mod tests {
         rules: {}
         "#;
         let config = parse_config(yaml).unwrap();
-        assert_eq!(config.rules.allowed_types, AllowedTypes::default());
-        assert_eq!(
-            config.rules.blank_line_before_footer,
-            BlankLineBeforeFooter::default()
-        );
-        assert_eq!(config.rules.body_line_length, BodyLineLength::default());
-        assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(config.rules.allowed_types, RuleConfig::default());
+        assert_eq!(config.rules.blank_line_before_footer, RuleConfig::default());
+        assert_eq!(config.rules.body_line_length, RuleConfig::default());
+        assert_eq!(config.rules.header_length, RuleConfig::default());
         assert_eq!(
             config.rules.no_description_terminal_punctuation,
-            NoDescriptionTerminalPunctuation::default()
+            RuleConfig::default()
         );
     }
 
@@ -159,12 +153,12 @@ mod tests {
         let config = parse_config(yaml).unwrap();
         assert_eq!(
             config.rules.body_line_length,
-            BodyLineLength {
+            RuleConfig {
                 enabled: false,
-                max_length: 100
+                rule: BodyLineLength { max_length: 100 },
             }
         );
-        assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(config.rules.header_length, RuleConfig::default());
     }
 
     #[test]
@@ -179,15 +173,15 @@ mod tests {
         let config = parse_config(yaml).unwrap();
         assert_eq!(
             config.rules.body_line_length,
-            BodyLineLength {
+            RuleConfig {
                 enabled: true,
                 ..Default::default()
             }
         );
         assert_eq!(
             config.rules.header_length,
-            HeaderLength {
-                max_length: 100,
+            RuleConfig {
+                rule: HeaderLength { max_length: 100 },
                 ..Default::default()
             }
         );
@@ -196,8 +190,8 @@ mod tests {
     #[test]
     fn read_default_value_for_null_rules() {
         let config = parse_config("rules:").unwrap();
-        assert_eq!(config.rules.allowed_types, AllowedTypes::default());
-        assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(config.rules.allowed_types, RuleConfig::default());
+        assert_eq!(config.rules.header_length, RuleConfig::default());
     }
 
     #[test]
@@ -208,10 +202,39 @@ mod tests {
           no_description_terminal_punctuation:
         "#;
         let config = parse_config(yaml).unwrap();
-        assert_eq!(config.rules.header_length, HeaderLength::default());
+        assert_eq!(config.rules.header_length, RuleConfig::default());
         assert_eq!(
             config.rules.no_description_terminal_punctuation,
-            NoDescriptionTerminalPunctuation::default()
+            RuleConfig::default()
+        );
+    }
+
+    #[test]
+    fn read_rule_options_next_to_enabled() {
+        let yaml = r#"
+        rules:
+          allowed_types:
+            enabled: false
+            allowed_types: [feat, fix]
+          no_description_terminal_punctuation:
+            enabled: false
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.allowed_types,
+            RuleConfig {
+                enabled: false,
+                rule: AllowedTypes {
+                    allowed_types: vec!["feat".to_string(), "fix".to_string()]
+                },
+            }
+        );
+        assert_eq!(
+            config.rules.no_description_terminal_punctuation,
+            RuleConfig {
+                enabled: false,
+                rule: NoDescriptionTerminalPunctuation {},
+            }
         );
     }
 
@@ -234,7 +257,7 @@ mod tests {
         let config = parse_config(yaml).unwrap();
         assert_eq!(
             config.rules.no_description_terminal_punctuation,
-            NoDescriptionTerminalPunctuation::default()
+            RuleConfig::default()
         );
     }
 

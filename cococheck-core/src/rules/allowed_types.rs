@@ -4,17 +4,11 @@ use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct AllowedTypes {
-    #[serde(default = "AllowedTypes::default_enabled")]
-    pub enabled: bool,
     #[serde(default = "AllowedTypes::default_allowed_types")]
     pub allowed_types: Vec<String>,
 }
 
 impl AllowedTypes {
-    fn default_enabled() -> bool {
-        true
-    }
-
     fn default_allowed_types() -> Vec<String> {
         vec![
             "build".to_string(),
@@ -36,7 +30,6 @@ impl AllowedTypes {
 impl Default for AllowedTypes {
     fn default() -> Self {
         AllowedTypes {
-            enabled: Self::default_enabled(),
             allowed_types: Self::default_allowed_types(),
         }
     }
@@ -45,10 +38,6 @@ impl Default for AllowedTypes {
 impl Rule for AllowedTypes {
     fn name(&self) -> &str {
         "AllowedTypes"
-    }
-
-    fn is_enabled(&self) -> bool {
-        self.enabled
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
