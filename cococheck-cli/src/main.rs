@@ -68,7 +68,13 @@ fn main() {
             Config::default()
         }
         Err(e) => {
-            error!("Error loading config: {}", e);
+            let mut message = e.to_string();
+            let mut source = std::error::Error::source(&e);
+            while let Some(cause) = source {
+                message = format!("{message}: {cause}");
+                source = cause.source();
+            }
+            error!("Error loading config: {}", message);
             std::process::exit(1);
         }
     };
@@ -82,13 +88,13 @@ fn main() {
         Err(GitError::RevisionNotFound {
             name,
             revision,
-            source,
+            error,
         }) => {
             error!(
                 "The specified --{} reference '{}' could not be found: {}",
                 name,
                 revision,
-                source.message()
+                error.message()
             );
             std::process::exit(1);
         }
