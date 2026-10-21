@@ -184,10 +184,30 @@ mod tests {
             config.rules.body_line_length,
             RuleConfig {
                 enabled: false,
-                rule: BodyLineLength { max_length: 100 },
+                rule: BodyLineLength {
+                    max_length: 100,
+                    ignore_urls: true,
+                },
             }
         );
         assert_eq!(config.rules.header_length, RuleConfig::default());
+    }
+
+    #[test]
+    fn read_ignore_urls() {
+        let yaml = r#"
+        rules:
+          body_line_length:
+            ignore_urls: false
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.body_line_length.rule,
+            BodyLineLength {
+                max_length: 72,
+                ignore_urls: false,
+            }
+        );
     }
 
     #[test]
