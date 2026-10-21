@@ -1,10 +1,11 @@
+use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
 use clap::Parser;
 use cococheck_core::config::{Config, ConfigError, load_config};
 use cococheck_core::git::get_commits;
 use cococheck_core::parser::parse_conventional_commit;
-use cococheck_core::rules::RuleSet;
+use cococheck_core::rules::{RuleError, RuleSet};
 use log::{LevelFilter, debug, info};
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -80,6 +81,11 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     let commits = range.commits;
 
     let rule_set = RuleSet::new(&config);
+    let renderer = if std::io::stdout().is_terminal() {
+        Renderer::styled()
+    } else {
+        Renderer::plain()
+    };
     let mut failed_commits = 0;
 
     for commit in &commits {
@@ -92,10 +98,7 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
 
                 if failed {
                     failed_commits += 1;
-                    println!("Commit {} failed:", commit.id);
-                    println!("\n--- MESSAGE ---");
-                    println!("Message: {}", message);
-                    println!("--- END MESSAGE ---\n");
+                    println!("Commit {} failed:\n", commit.id);
                 } else {
                     info!("Commit {} passed.", commit.id);
                 }
@@ -106,15 +109,8 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
                     if errors.is_empty() {
                         debug!("  Rule '{}' passed", rule_name);
                     } else {
-                        println!("  Rule '{}' failed:", rule_name);
                         for e in errors {
-                            match &e.span {
-                                Some(span) => println!(
-                                    "  - {} (span: {}..{})",
-                                    e.message, span.start, span.end
-                                ),
-                                None => println!("  - {}", e.message),
-                            }
+                            println!("{}\n", render_error(&renderer, rule_name, e, message));
                         }
                     }
                 }
@@ -141,6 +137,20 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     }
 
     Ok(failed_commits == 0)
+}
+
+/// Render the `error` reported by the rule named `rule_name` as an annotated snippet of the commit
+/// `message`.
+fn render_error(renderer: &Renderer, rule_name: &str, error: &RuleError, message: &str) -> String {
+    let title = Level::ERROR.primary_title(&error.message).id(rule_name);
+    let group = match &error.span {
+        Some(span) => title.element(
+            Snippet::source(message).annotation(AnnotationKind::Primary.span(span.clone())),
+        ),
+        None => Group::with_title(title),
+    };
+
+    renderer.render(&[group])
 }
 
 /// Load the config file at `config_path`, or from the repository at `repo_path` if no path is
