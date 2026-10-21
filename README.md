@@ -54,7 +54,13 @@ CoCoCheck parses each commit message, applies the enabled [rules](#rules), and r
 commit that fails:
 
 ```text
-Commit 00e0da671f8fe523dc47c78033e776f803798424 failed to parse: cannot parse header line 'Update stuff.'
+Commit 00e0da671f8fe523dc47c78033e776f803798424 failed to parse:
+
+error: invalid header: expected ': ' after the type
+  |
+1 | Update stuff.
+  |       ^
+
 Commit 2819a1a133fa4e1fcefb08f90c1bb2bb8f675c93 failed:
 
 error[NoDescriptionTerminalPunctuation]: Description should not end with terminal punctuation (., !, ?).
@@ -115,6 +121,17 @@ error[BodyLineLength]: Body line 2 exceeds maximum length of 72 characters (actu
   |
 4 | This body line is much too long, way more than seventy-two characters, to show it.
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+A commit that cannot be parsed is reported the same way, with a snippet that marks the problem:
+
+```text
+Commit c5d6497950f16a5d88d5b582db4b93180173a81d failed to parse:
+
+error: invalid header: the scope must not be empty
+  |
+1 | feat(): Add a new feature
+  |     ^^
 ```
 
 When standard output is a terminal, the report is colored.
