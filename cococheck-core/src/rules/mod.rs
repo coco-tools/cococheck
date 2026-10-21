@@ -13,12 +13,26 @@ pub trait Rule {
     fn check(&self, message: &ConventionalCommit) -> Vec<RuleError>;
 }
 
-/// The configuration of a rule: Whether it is enabled, and the rule with its own options, which are
-/// flattened into the same YAML mapping as the `enabled` flag.
+/// How a violation of a rule is treated.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum Severity {
+    /// The violation is reported, but the commit passes the checks.
+    Warning,
+
+    /// The violation is reported, and the commit fails the checks.
+    #[default]
+    Error,
+}
+
+/// The configuration of a rule: Whether it is enabled, its severity, and the rule with its own
+/// options, which are flattened into the same YAML mapping as the `enabled` flag.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct RuleConfig<R> {
     #[serde(default = "default_enabled")]
     pub enabled: bool,
+    #[serde(default)]
+    pub severity: Severity,
     #[serde(flatten)]
     pub rule: R,
 }
@@ -31,13 +45,14 @@ impl<R: Default> Default for RuleConfig<R> {
     fn default() -> Self {
         RuleConfig {
             enabled: default_enabled(),
+            severity: Severity::default(),
             rule: R::default(),
         }
     }
 }
 
 mod rule_set;
-pub use rule_set::RuleSet;
+pub use rule_set::{RuleResult, RuleSet};
 
 mod allowed_types;
 pub use allowed_types::AllowedTypes;
