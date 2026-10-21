@@ -53,7 +53,8 @@ pub fn parse_conventional_commit(
 ) -> Result<ConventionalCommit, ParseError> {
     let mut lines = message.lines();
 
-    let header_line = lines.next().unwrap_or("").trim();
+    // Only strip trailing whitespace, so that a header with leading whitespace is rejected.
+    let header_line = lines.next().unwrap_or("").trim_end();
     let header_regex =
         regex!(r"^(?P<type>\w+)(\((?P<scope>[^)]+)\))?(?P<breaking>!)?: (?P<desc>.+)$");
 
@@ -140,12 +141,13 @@ pub fn parse_conventional_commit(
     })
 }
 
-/// Split the trimmed lines into paragraphs separated by one or more empty lines.
+/// Split the lines into paragraphs separated by one or more empty lines. Trailing whitespace is
+/// removed from the lines, but leading whitespace is kept to preserve indentation.
 fn split_paragraphs<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<Vec<&'a str>> {
     let mut paragraphs: Vec<Vec<&str>> = Vec::new();
     let mut last_line_empty = true;
 
-    for line in lines.map(str::trim) {
+    for line in lines.map(str::trim_end) {
         if line.is_empty() {
             last_line_empty = true;
             continue;
@@ -183,6 +185,23 @@ pub fn parse_footer_line(line: &str) -> Option<(String, String)> {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    /// Remove the leading line break and the common indentation of all non-empty lines, so that
+    /// commit messages can be written as indented raw strings.
+    fn dedent(text: &str) -> String {
+        let text = text.strip_prefix('\n').unwrap_or(text);
+        let indent = text
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.len() - line.trim_start().len())
+            .min()
+            .unwrap_or(0);
+
+        text.lines()
+            .map(|line| line.get(indent..).unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 
     #[test]
     fn parses_header_without_scope() {
@@ -240,7 +259,8 @@ mod tests {
 
     #[test]
     fn parses_body_and_footer() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         fix: resolve issue
 
         This is the body of the commit.
@@ -251,8 +271,8 @@ mod tests {
         BREAKING CHANGE: major update
         Signed-off-by: John Doe <john.doe@example.org>
         Fixes #123
-        "#
-        .trim();
+        "#,
+        );
         let expected = ConventionalCommit {
             header: "fix: resolve issue".to_string(),
             commit_type: "fix".to_string(),
@@ -279,7 +299,8 @@ mod tests {
 
     #[test]
     fn parses_footers_with_multiple_lines() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         This is the body.
@@ -288,8 +309,8 @@ mod tests {
         that spans multiple lines and provides detailed information
         about the change.
         Signed-off-by: John Doe <john.doe@example.org>
-        "#
-        .trim();
+        "#,
+        );
 
         let expected = ConventionalCommit {
             header: "feat: add new feature".to_string(),
@@ -314,15 +335,16 @@ mod tests {
 
     #[test]
     fn parses_footers_with_links() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         This [1] is the body [2].
 
         [1]: https://example.org/issue/123
         [2]: https://example.org/issue/456
-        "#
-        .trim();
+        "#,
+        );
 
         let expected = ConventionalCommit {
             header: "feat: add new feature".to_string(),
@@ -350,15 +372,16 @@ mod tests {
 
     #[test]
     fn parses_footers_with_footnotes() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         This[^1] is the body[^2].
 
         [^1]: https://example.org/issue/123
         [^2]: https://example.org/issue/456
-        "#
-        .trim();
+        "#,
+        );
 
         let expected = ConventionalCommit {
             header: "feat: add new feature".to_string(),
@@ -386,14 +409,15 @@ mod tests {
 
     #[test]
     fn detects_breaking_change_in_footer() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         This is the body.
 
         BREAKING CHANGE: major update
-        "#
-        .trim();
+        "#,
+        );
 
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default())
@@ -402,14 +426,15 @@ mod tests {
             true
         );
 
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         This is the body.
 
         BREAKING-CHANGE: major update
-        "#
-        .trim();
+        "#,
+        );
 
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default())
@@ -421,12 +446,13 @@ mod tests {
 
     #[test]
     fn ignores_lowercase_breaking_change_footer() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         breaking-change: not a breaking change
-        "#
-        .trim();
+        "#,
+        );
 
         let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
 
@@ -452,6 +478,69 @@ mod tests {
     }
 
     #[test]
+    fn fails_on_header_with_leading_whitespace() {
+        let message = "  feat: add new feature";
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()),
+            Err(ParseError::InvalidHeader {
+                header: "  feat: add new feature".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn ignores_trailing_whitespace_in_header() {
+        let message = "feat: add new feature  \r\n";
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+
+        assert_eq!(commit.header, "feat: add new feature");
+        assert_eq!(commit.description, "add new feature");
+    }
+
+    #[test]
+    fn preserves_indentation_in_body() {
+        let message = dedent(
+            r#"
+            feat: add new feature
+
+            Run the following command:
+
+                cargo run -- --help
+                  --verbose
+
+            BREAKING CHANGE: the output changed
+              and is indented
+            "#,
+        );
+
+        let commit = parse_conventional_commit(&message, &ParserConfig::default()).unwrap();
+
+        assert_eq!(
+            commit.body,
+            Some(
+                "Run the following command:\n\n    cargo run -- --help\n      --verbose"
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            commit.footer,
+            vec![footer(
+                "BREAKING CHANGE",
+                "the output changed\n  and is indented"
+            )]
+        );
+    }
+
+    #[test]
+    fn removes_line_endings_and_trailing_whitespace_from_body() {
+        let message = "feat: add new feature\r\n\r\n  Body. \r\n\tIndented.\t\r\n";
+
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+
+        assert_eq!(commit.body, Some("  Body.\n\tIndented.".to_string()));
+    }
+
+    #[test]
     fn fails_on_non_empty_line_after_header() {
         let message = "feat: add new feature\nThis line should not be here";
         assert_eq!(
@@ -462,13 +551,14 @@ mod tests {
 
     #[test]
     fn recognizes_footer_only_after_empty_line() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         This is the body.
         BREAKING CHANGE: major update
-        "#
-        .trim();
+        "#,
+        );
 
         let expected = ConventionalCommit {
             header: "feat: add new feature".to_string(),
@@ -498,7 +588,8 @@ mod tests {
 
     #[test]
     fn does_not_parse_body_paragraphs_as_footers() {
-        let message = r#"
+        let message = &dedent(
+            r#"
         feat: add new feature
 
         Intro.
@@ -508,8 +599,8 @@ mod tests {
         More body text.
 
         Refs: #1
-        "#
-        .trim();
+        "#,
+        );
 
         for config in [ParserConfig::default(), TRAILING_PARAGRAPHS] {
             let commit = parse_conventional_commit(message, &config).unwrap();

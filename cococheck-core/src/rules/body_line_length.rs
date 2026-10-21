@@ -51,13 +51,7 @@ mod tests {
     #[test]
     fn succeeds_for_valid_body_length() {
         let commit = parse_conventional_commit(
-            r#"
-            feat: add new feature
-
-            This is a valid body line.
-            This is another one.
-            "#
-            .trim(),
+            "feat: add new feature\n\nThis is a valid body line.\nThis is another one.",
             &ParserConfig::default(),
         )
         .unwrap();
@@ -80,15 +74,7 @@ mod tests {
     #[test]
     fn reports_all_body_lines_exceeding_max_length() {
         let commit = parse_conventional_commit(
-            r#"
-            feat: add new feature
-
-            This is ok.
-            This line is way too long.
-            Also ok.
-            This line is also too long.
-            "#
-            .trim(),
+            "feat: add new feature\n\nThis is ok.\nThis line is way too long.\nAlso ok.\nThis line is also too long.",
             &ParserConfig::default(),
         )
         .unwrap();
