@@ -3,7 +3,7 @@ use clap::Parser;
 use cococheck_core::config::{Config, ConfigError, load_config};
 use cococheck_core::git::{CommitInfo, get_commits};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
-use cococheck_core::rules::RuleSet;
+use cococheck_core::rules::{RuleSet, Severity};
 use log::{LevelFilter, debug, info};
 use std::io::{IsTerminal, Write};
 use std::ops::Range;
@@ -72,14 +72,11 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     let commits = collect_commits(args)?;
 
     let checker = Checker::new(&config);
-    let failed_commits = commits
-        .iter()
-        .filter(|commit| !checker.check(commit))
-        .count();
+    let outcomes: Vec<Outcome> = commits.iter().map(|commit| checker.check(commit)).collect();
 
-    print_summary(commits.len(), failed_commits);
+    print_summary(&outcomes);
 
-    Ok(failed_commits == 0)
+    Ok(!outcomes.contains(&Outcome::Failed))
 }
 
 /// Collect the commits in the range selected by `args`, ordered from oldest to newest.
@@ -95,6 +92,19 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<CommitInfo>> {
     );
 
     Ok(range.commits)
+}
+
+/// The outcome of checking a single commit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Outcome {
+    /// The commit passed all rules.
+    Passed,
+
+    /// The commit violated only rules with the severity `warning`.
+    PassedWithWarnings,
+
+    /// The commit could not be parsed, or violated a rule with the severity `error`.
+    Failed,
 }
 
 /// Checks commit messages with the configured parser and rules, and reports the failures.
@@ -119,8 +129,8 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// Check the message of the `commit` and report its errors. Return whether the commit passed.
-    fn check(&self, commit: &CommitInfo) -> bool {
+    /// Check the message of the `commit` and report its errors and warnings.
+    fn check(&self, commit: &CommitInfo) -> Outcome {
         let message = &commit.message;
 
         let parsed = match parse_conventional_commit(message, &self.config.parser) {
@@ -128,50 +138,83 @@ impl<'a> Checker<'a> {
             Err(e) => {
                 println!("Commit {} failed to parse:\n", commit.id);
                 let span = parse_error_span(&e);
-                self.print_error(None, &e.to_string(), span, message);
-                return false;
+                self.print_error(Severity::Error, None, &e.to_string(), span, message);
+                return Outcome::Failed;
             }
         };
 
         debug!("{:#?}", parsed);
 
-        let rule_errors = self.rule_set.check_commit(&parsed);
-        let failed = rule_errors.iter().any(|(_, errors)| !errors.is_empty());
+        let results = self.rule_set.check_commit(&parsed);
+        let has_violations = |severity| {
+            results
+                .iter()
+                .any(|result| result.severity == severity && !result.errors.is_empty())
+        };
 
-        if failed {
+        let outcome = if has_violations(Severity::Error) {
             println!("Commit {} failed:\n", commit.id);
+            Outcome::Failed
+        } else if has_violations(Severity::Warning) {
+            println!("Commit {} passed with warnings:\n", commit.id);
+            Outcome::PassedWithWarnings
         } else {
             info!("Commit {} passed.", commit.id);
-        }
+            Outcome::Passed
+        };
 
-        for (rule_name, errors) in &rule_errors {
-            if errors.is_empty() {
-                debug!("  Rule '{}' passed", rule_name);
+        for result in &results {
+            if result.errors.is_empty() {
+                debug!("  Rule '{}' passed", result.rule_name);
             }
 
-            for e in errors {
-                self.print_error(Some(rule_name), &e.message, e.span.clone(), message);
+            for e in &result.errors {
+                let span = e.span.clone();
+                self.print_error(
+                    result.severity,
+                    Some(&result.rule_name),
+                    &e.message,
+                    span,
+                    message,
+                );
             }
         }
 
-        !failed
+        outcome
     }
 
-    fn print_error(&self, id: Option<&str>, text: &str, span: Option<Range<usize>>, message: &str) {
-        println!(
-            "{}\n",
-            render_error(&self.renderer, id, text, span, message)
-        );
+    fn print_error(
+        &self,
+        severity: Severity,
+        id: Option<&str>,
+        text: &str,
+        span: Option<Range<usize>>,
+        message: &str,
+    ) {
+        let rendered = render_error(&self.renderer, severity, id, text, span, message);
+        println!("{}\n", rendered);
     }
 }
 
-/// Print how many commits were checked and how many of them failed.
-fn print_summary(checked_commits: usize, failed_commits: usize) {
+/// Print how many commits were checked, and how many of them failed or had warnings.
+fn print_summary(outcomes: &[Outcome]) {
+    let count = |outcome| outcomes.iter().filter(|&&o| o == outcome).count();
+    let failed_commits = count(Outcome::Failed);
+    let warned_commits = count(Outcome::PassedWithWarnings);
+
     println!(
         "CoCoCheck finished checking {} commit{}.",
-        checked_commits,
-        plural(checked_commits)
+        outcomes.len(),
+        plural(outcomes.len())
     );
+
+    if warned_commits > 0 {
+        println!(
+            "{} commit{} passed with warnings.",
+            warned_commits,
+            plural(warned_commits)
+        );
+    }
 
     if failed_commits > 0 {
         println!(
@@ -187,16 +230,21 @@ fn plural(count: usize) -> &'static str {
     if count == 1 { "" } else { "s" }
 }
 
-/// Render the error with the `text` as an annotated snippet of the commit `message` that marks the
-/// `span`. The `id` is the name of the rule that reported the error, if any.
+/// Render the error or warning with the `text` as an annotated snippet of the commit `message` that
+/// marks the `span`. The `id` is the name of the rule that reported the error, if any.
 fn render_error(
     renderer: &Renderer,
+    severity: Severity,
     id: Option<&str>,
     text: &str,
     span: Option<Range<usize>>,
     message: &str,
 ) -> String {
-    let title = Level::ERROR.primary_title(text);
+    let level = match severity {
+        Severity::Warning => Level::WARNING,
+        Severity::Error => Level::ERROR,
+    };
+    let title = level.primary_title(text);
     let title = match id {
         Some(id) => title.id(id),
         None => title,

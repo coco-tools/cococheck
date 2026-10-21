@@ -103,6 +103,7 @@ pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
 mod tests {
     use super::*;
     use crate::parser::FooterDetection;
+    use crate::rules::Severity;
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -184,6 +185,7 @@ mod tests {
             config.rules.body_line_length,
             RuleConfig {
                 enabled: false,
+                severity: Severity::Error,
                 rule: BodyLineLength {
                     max_length: 100,
                     ignore_urls: true,
@@ -273,6 +275,7 @@ mod tests {
             config.rules.allowed_types,
             RuleConfig {
                 enabled: false,
+                severity: Severity::Error,
                 rule: AllowedTypes {
                     allowed_types: vec!["feat".to_string(), "fix".to_string()]
                 },
@@ -282,6 +285,7 @@ mod tests {
             config.rules.no_description_terminal_punctuation,
             RuleConfig {
                 enabled: false,
+                severity: Severity::Error,
                 rule: NoDescriptionTerminalPunctuation {},
             }
         );
@@ -299,11 +303,37 @@ mod tests {
             config.rules.required_footers,
             RuleConfig {
                 enabled: true,
+                severity: Severity::Error,
                 rule: RequiredFooters {
                     tokens: vec!["Signed-off-by".to_string()]
                 },
             }
         );
+    }
+
+    #[test]
+    fn read_severity() {
+        let yaml = r#"
+        rules:
+          header_length:
+            severity: warning
+          body_line_length:
+            severity: error
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(config.rules.header_length.severity, Severity::Warning);
+        assert_eq!(config.rules.body_line_length.severity, Severity::Error);
+        assert_eq!(config.rules.allowed_types.severity, Severity::Error);
+    }
+
+    #[test]
+    fn fails_for_unknown_severity() {
+        let yaml = r#"
+        rules:
+          header_length:
+            severity: info
+        "#;
+        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse { .. })));
     }
 
     #[test]
