@@ -72,12 +72,17 @@ CoCoCheck finished checking 3 commits.
 | Option                  | Description                                          | Default         |
 |-------------------------|------------------------------------------------------|-----------------|
 | `-i`, `--input <INPUT>` | Path to the Git repository to check.                 | `.`             |
+| `-c`, `--config <PATH>` | Path to the [configuration](#configuration) file.    | See below       |
 | `--from <FROM>`         | First commit to check. The commit itself is checked. | The root commit |
 | `--to <TO>`             | Last commit to check. The commit itself is checked.  | `HEAD`          |
 | `--info`                | Log informational messages, such as passed commits.  |                 |
 | `--debug`               | Log debug messages, including the parsed commits.    |                 |
 | `-h`, `--help`          | Print help.                                          |                 |
 | `-V`, `--version`       | Print the version.                                   |                 |
+
+Without `--config`, CoCoCheck reads `cococheck.yml` from the repository given by `--input`, and
+uses the default configuration if that file does not exist. A file given with `--config` must exist;
+otherwise CoCoCheck fails with an error.
 
 `--from` and `--to` accept any Git revision that resolves to a commit, such as a commit ID, a branch
 or tag name, or an expression like `HEAD~3`. The range is inclusive at both ends, unlike Git's
