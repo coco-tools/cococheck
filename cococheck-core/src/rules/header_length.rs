@@ -3,22 +3,14 @@ use crate::parser::ConventionalCommit;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct HeaderLength {
-    #[serde(default = "HeaderLength::default_max_length")]
     pub max_length: usize,
-}
-
-impl HeaderLength {
-    fn default_max_length() -> usize {
-        72
-    }
 }
 
 impl Default for HeaderLength {
     fn default() -> Self {
-        HeaderLength {
-            max_length: Self::default_max_length(),
-        }
+        HeaderLength { max_length: 72 }
     }
 }
 
