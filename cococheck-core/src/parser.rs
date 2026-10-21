@@ -1,6 +1,9 @@
 use regex::regex;
 use serde::Deserialize;
+use std::ops::Range;
 
+/// A parsed commit message. The header is always the first line of the message, so positions in
+/// the header are also positions in the full message.
 #[derive(Debug, PartialEq)]
 pub struct ConventionalCommit {
     pub header: String,
@@ -9,7 +12,18 @@ pub struct ConventionalCommit {
     pub is_breaking_change: bool,
     pub description: String,
     pub body: Option<String>,
+    /// The lines of `body` with their positions in the full message. Like the lines of `body`, the
+    /// paragraphs are separated by a single empty line, whose span is empty and at the end of the
+    /// previous line.
+    pub body_lines: Vec<Line>,
     pub footer: Vec<Footer>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Line {
+    pub text: String,
+    /// The byte range of the line in the full commit message.
+    pub span: Range<usize>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -98,6 +112,28 @@ pub fn parse_conventional_commit(
         )
     };
 
+    // The paragraphs contain slices of `message`, so their offsets in the message can be computed.
+    let line_span = |line: &str| {
+        let start = line.as_ptr() as usize - message.as_ptr() as usize;
+        start..start + line.len()
+    };
+
+    let mut body_lines: Vec<Line> = Vec::new();
+    for paragraph in body_paragraphs {
+        if let Some(previous) = body_lines.last() {
+            let end = previous.span.end;
+            body_lines.push(Line {
+                text: String::new(),
+                span: end..end,
+            });
+        }
+
+        body_lines.extend(paragraph.iter().map(|&line| Line {
+            text: line.to_string(),
+            span: line_span(line),
+        }));
+    }
+
     let mut footers = Vec::new();
     let mut breaking_change_footer_found = false;
 
@@ -137,6 +173,7 @@ pub fn parse_conventional_commit(
         is_breaking_change: breaking_change_footer_found || caps.name("breaking").is_some(),
         description: caps["desc"].to_string(),
         body,
+        body_lines,
         footer: footers,
     })
 }
@@ -213,6 +250,7 @@ mod tests {
             is_breaking_change: false,
             description: "add new feature".to_string(),
             body: None,
+            body_lines: vec![],
             footer: Vec::new(),
         };
         assert_eq!(
@@ -231,6 +269,7 @@ mod tests {
             is_breaking_change: false,
             description: "correct minor issue".to_string(),
             body: None,
+            body_lines: vec![],
             footer: Vec::new(),
         };
         assert_eq!(
@@ -249,6 +288,7 @@ mod tests {
             is_breaking_change: true,
             description: "introduce breaking change".to_string(),
             body: None,
+            body_lines: vec![],
             footer: Vec::new(),
         };
         assert_eq!(
@@ -280,6 +320,7 @@ mod tests {
             is_breaking_change: true,
             description: "resolve issue".to_string(),
             body: Some("This is the body of the commit.\nThis is the second line of the body.\n\nThis is the third line of the body.".to_string()),
+            body_lines: vec![line("This is the body of the commit.", 20..51), line("This is the second line of the body.", 52..88), line("", 88..88), line("This is the third line of the body.", 90..125)],
             footer: vec![Footer {
                 token: "BREAKING CHANGE".to_string(),
                 value: "major update".to_string(),
@@ -319,6 +360,7 @@ mod tests {
             is_breaking_change: true,
             description: "add new feature".to_string(),
             body: Some("This is the body.".to_string()),
+            body_lines: vec![line("This is the body.", 23..40)],
             footer: vec![Footer {
                 token: "BREAKING CHANGE".to_string(),
                 value: "This is a long breaking change description\nthat spans multiple lines and provides detailed information\nabout the change.".to_string(),
@@ -353,6 +395,7 @@ mod tests {
             is_breaking_change: false,
             description: "add new feature".to_string(),
             body: Some("This [1] is the body [2].".to_string()),
+            body_lines: vec![line("This [1] is the body [2].", 23..48)],
             footer: vec![
                 Footer {
                     token: "[1]".to_string(),
@@ -390,6 +433,7 @@ mod tests {
             is_breaking_change: false,
             description: "add new feature".to_string(),
             body: Some("This[^1] is the body[^2].".to_string()),
+            body_lines: vec![line("This[^1] is the body[^2].", 23..48)],
             footer: vec![
                 Footer {
                     token: "[^1]".to_string(),
@@ -498,6 +542,26 @@ mod tests {
     }
 
     #[test]
+    fn records_spans_of_body_lines_in_message() {
+        let message = "feat: x\r\n\r\nFirst line  \r\n    indented\r\n\r\n\r\nLast";
+
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+
+        assert_eq!(
+            commit.body_lines,
+            vec![
+                line("First line", 11..21),
+                line("    indented", 25..37),
+                line("", 37..37),
+                line("Last", 43..47),
+            ]
+        );
+        for line in commit.body_lines {
+            assert_eq!(&message[line.span], line.text);
+        }
+    }
+
+    #[test]
     fn preserves_indentation_in_body() {
         let message = dedent(
             r#"
@@ -567,6 +631,10 @@ mod tests {
             is_breaking_change: false,
             description: "add new feature".to_string(),
             body: Some("This is the body.\nBREAKING CHANGE: major update".to_string()),
+            body_lines: vec![
+                line("This is the body.", 23..40),
+                line("BREAKING CHANGE: major update", 41..70),
+            ],
             footer: Vec::new(),
         };
         assert_eq!(
@@ -578,6 +646,13 @@ mod tests {
     const TRAILING_PARAGRAPHS: ParserConfig = ParserConfig {
         footer_detection: FooterDetection::TrailingParagraphs,
     };
+
+    fn line(text: &str, span: Range<usize>) -> Line {
+        Line {
+            text: text.to_string(),
+            span,
+        }
+    }
 
     fn footer(token: &str, value: &str) -> Footer {
         Footer {
