@@ -29,6 +29,12 @@ pub enum GitError {
         error: git2::Error,
     },
 
+    #[error("the '{name}' revision '{revision}' does not point to a commit")]
+    NotACommit {
+        name: &'static str,
+        revision: String,
+    },
+
     #[error("the repository does not contain any commits")]
     NoCommits,
 
@@ -102,7 +108,12 @@ fn resolve_revision(
         })?;
 
     // Peel the object to get the commit an annotated tag points to.
-    Ok(object.peel_to_commit()?.id())
+    let commit = object.peel_to_commit().map_err(|_| GitError::NotACommit {
+        name,
+        revision: revision.to_string(),
+    })?;
+
+    Ok(commit.id())
 }
 
 fn find_first_commit(repo: &Repository) -> Result<Oid, git2::Error> {
@@ -330,6 +341,19 @@ mod tests {
         assert!(matches!(
             result,
             Err(GitError::RevisionNotFound { name: "from", .. })
+        ));
+    }
+
+    #[test]
+    fn fails_for_revision_that_is_not_a_commit() {
+        let (dir, repo) = init_repo();
+        linear_history(&repo, &["first"]);
+
+        let result = get_commits(dir.path(), None, Some("HEAD^{tree}"));
+
+        assert!(matches!(
+            result,
+            Err(GitError::NotACommit { name: "to", .. })
         ));
     }
 
