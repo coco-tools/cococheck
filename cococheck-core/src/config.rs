@@ -3,17 +3,101 @@ use crate::rules::{
     AllowedTypes, BlankLineBeforeFooter, BodyLineLength, HeaderLength,
     NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig,
 };
+use regex::Regex;
 use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
-#[derive(Debug, Default, Deserialize)]
+/// The patterns of the messages that Git and Git hosting platforms create, which do not follow the
+/// Conventional Commits specification and are ignored by default.
+const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
+    // Merges created by `git merge` and `git pull`, and by Git hosting platforms.
+    r"^Merge (branch|branches|tag|tags|commit|remote-tracking branch|pull request) ",
+    r"^Merged (in|PR) ",
+    // Reverts created by `git revert`, which creates `Reapply` for the revert of a revert.
+    r#"^(Revert|Reapply) ""#,
+    // Commits created by `git commit --fixup` and `git commit --squash`.
+    r"^(amend|fixup|squash)! ",
+];
+
+static DEFAULT_IGNORES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    DEFAULT_IGNORE_PATTERNS
+        .iter()
+        .map(|pattern| Regex::new(pattern).expect("default ignore patterns are valid"))
+        .collect()
+});
+
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    /// Whether the messages that Git creates, like merge and revert commits, are ignored.
+    #[serde(default = "default_default_ignores")]
+    pub default_ignores: bool,
+
+    /// Regular expressions for further messages to ignore. A message is ignored if any part of it
+    /// matches one of them.
+    #[serde(default, deserialize_with = "deserialize_patterns")]
+    pub ignores: Vec<Regex>,
+
     #[serde(default, deserialize_with = "null_as_default")]
     pub parser: ParserConfig,
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub rules: RulesConfig,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            default_ignores: default_default_ignores(),
+            ignores: Vec::new(),
+            parser: ParserConfig::default(),
+            rules: RulesConfig::default(),
+        }
+    }
+}
+
+impl Config {
+    /// Return whether the commit `message` is ignored, because it matches one of the default ignore
+    /// patterns, if they are enabled, or one of the configured `ignores`.
+    pub fn is_ignored(&self, message: &str) -> bool {
+        // Git terminates the last line with a newline, but without the multi-line flag, `$` only
+        // matches at the very end of the message, so a pattern like `^Initial commit$` would never
+        // match.
+        let message = message.trim_end();
+
+        let defaults: &[Regex] = if self.default_ignores {
+            &DEFAULT_IGNORES
+        } else {
+            &[]
+        };
+
+        defaults
+            .iter()
+            .chain(&self.ignores)
+            .any(|pattern| pattern.is_match(message))
+    }
+}
+
+fn default_default_ignores() -> bool {
+    true
+}
+
+/// Deserialize a list of regular expressions, failing for an invalid one. A YAML null value is
+/// deserialized as an empty list.
+fn deserialize_patterns<'de, D>(deserializer: D) -> Result<Vec<Regex>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<Vec<String>>::deserialize(deserializer)?
+        .unwrap_or_default()
+        .iter()
+        .map(|pattern| {
+            Regex::new(pattern).map_err(|e| {
+                serde::de::Error::custom(format!("invalid ignore pattern '{pattern}': {e}"))
+            })
+        })
+        .collect()
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -118,6 +202,103 @@ mod tests {
             RuleConfig::default()
         );
         assert_eq!(config.rules.required_footers, RuleConfig::default());
+    }
+
+    #[test]
+    fn ignores_messages_created_by_git_by_default() {
+        let config = parse_config("").unwrap();
+        let messages = [
+            "Merge branch 'feature'",
+            "Merge branch 'main' of github.com:example/repo",
+            "Merge branches 'a' and 'b'",
+            "Merge remote-tracking branch 'origin/main'",
+            "Merge tag 'v1.0.0'",
+            "Merge commit '0123456'",
+            "Merge pull request #1 from example/feature\n\nfeat: Add a feature",
+            "Merged in feature (pull request #1)",
+            "Merged PR 1: Add a feature",
+            "Revert \"feat: Add a feature\"\n\nThis reverts commit 0123456.",
+            "Reapply \"feat: Add a feature\"",
+            "fixup! feat: Add a feature",
+            "squash! feat: Add a feature",
+            "amend! feat: Add a feature",
+        ];
+
+        for message in messages {
+            assert!(config.is_ignored(message), "{message}");
+        }
+    }
+
+    #[test]
+    fn does_not_ignore_other_messages_by_default() {
+        let config = parse_config("").unwrap();
+        let messages = [
+            "feat: Add a feature",
+            "revert: Remove a feature",
+            "fix: Merge branch names correctly",
+            "Merge the configurations",
+            "Update stuff\n\nMerge branch 'feature'",
+            "fixup: Not a fixup commit",
+        ];
+
+        for message in messages {
+            assert!(!config.is_ignored(message), "{message}");
+        }
+    }
+
+    #[test]
+    fn default_ignores_can_be_disabled() {
+        let config = parse_config("default_ignores: false").unwrap();
+        assert!(!config.is_ignored("Merge branch 'feature'"));
+        assert!(!config.is_ignored("fixup! feat: Add a feature"));
+    }
+
+    #[test]
+    fn ignores_messages_matching_configured_patterns() {
+        let yaml = r#"
+        default_ignores: false
+        ignores:
+          - '^WIP\b'
+          - '(?m)^\[skip ci\]$'
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert!(config.is_ignored("WIP: Add a feature"));
+        assert!(config.is_ignored("feat: Add a feature\n\n[skip ci]"));
+        assert!(!config.is_ignored("feat: Add WIP feature"));
+        assert!(!config.is_ignored("Merge branch 'feature'"));
+    }
+
+    #[test]
+    fn matches_the_end_of_the_message_before_trailing_whitespace() {
+        let config = parse_config("ignores: ['^Initial commit$']").unwrap();
+        assert!(config.is_ignored("Initial commit\n"));
+        assert!(config.is_ignored("Initial commit \n\n"));
+        assert!(!config.is_ignored("Initial commit\n\nBody.\n"));
+    }
+
+    #[test]
+    fn configured_patterns_extend_the_default_ignores() {
+        let config = parse_config("ignores: ['^WIP']").unwrap();
+        assert!(config.is_ignored("WIP: Add a feature"));
+        assert!(config.is_ignored("Merge branch 'feature'"));
+    }
+
+    #[test]
+    fn read_default_value_for_null_ignores() {
+        let config = parse_config("ignores:").unwrap();
+        assert!(config.ignores.is_empty());
+        assert!(config.default_ignores);
+    }
+
+    #[test]
+    fn fails_for_invalid_ignore_pattern() {
+        let message = parse_config("ignores: ['(unclosed']")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains("invalid ignore pattern '(unclosed'"),
+            "{message}"
+        );
     }
 
     #[test]

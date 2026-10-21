@@ -150,6 +150,9 @@ rule name causes an error instead of being silently ignored.
 The following file sets every option to its default value:
 
 ```yaml
+default_ignores: true
+ignores: []
+
 parser:
   footer_detection: last_paragraph
 
@@ -184,7 +187,44 @@ rules:
 Independent of the configured rules, every commit message must have a valid Conventional Commits
 header of the form `type(scope)!: description`, where the scope and the `!` are optional. If the
 message has a body, the header must be followed by a blank line. A commit that does not meet
-these requirements fails with a parse error, and no rules are applied to it.
+these requirements fails with a parse error, and no rules are applied to it. Commits that are
+[ignored](#ignored-commits) are not checked at all.
+
+### Ignored commits
+
+Git creates messages that do not follow the Conventional Commits specification, for example for
+merge commits. CoCoCheck ignores commits with such messages by default. A message is ignored if it
+starts with one of the following:
+
+- `Merge branch `, `Merge branches `, `Merge tag `, `Merge tags `, `Merge commit `,
+  `Merge remote-tracking branch `, or `Merge pull request `, as created by `git merge`, `git pull`,
+  and GitHub or GitLab when merging a pull request.
+- `Merged in ` or `Merged PR `, as created by Bitbucket and Azure DevOps when merging a pull
+  request.
+- `Revert "` or `Reapply "`, as created by `git revert`.
+- `fixup! `, `squash! `, or `amend! `, as created by `git commit --fixup` and `git commit --squash`.
+
+To ignore further commits, add [regular expressions](https://docs.rs/regex/latest/regex/#syntax) to
+`ignores`. The expressions are matched against the whole message, without trailing whitespace, and
+a message is ignored if any part of it matches one of them. `^` and `$` match at the start and end
+of the message, so `^Initial commit$` only ignores messages that consist of this single line. To
+make `^` and `$` match at the start and end of every line instead, add the `(?m)` flag:
+
+```yaml
+ignores:
+  # Messages whose header starts with "WIP".
+  - '^WIP\b'
+  # Messages with a line that only contains "[skip checks]".
+  - '(?m)^\[skip checks\]$'
+```
+
+To check the commits that are ignored by default, set `default_ignores` to `false`. The expressions
+in `ignores` still apply.
+
+| Setting           | Description                                                          | Default |
+|-------------------|----------------------------------------------------------------------|---------|
+| `default_ignores` | Whether the messages that Git creates, as listed above, are ignored. | `true`  |
+| `ignores`         | Regular expressions for further messages to ignore.                  | `[]`    |
 
 ### Parser
 
