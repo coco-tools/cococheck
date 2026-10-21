@@ -1,6 +1,5 @@
 use regex::regex;
 use serde::Deserialize;
-use std::fmt;
 
 #[derive(Debug, PartialEq)]
 pub struct ConventionalCommit {
@@ -19,23 +18,13 @@ pub struct Footer {
     pub value: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ParseError {
+    #[error("cannot parse header line '{header}'")]
     InvalidHeader { header: String },
-    MissingBlankLineAfterHeader,
-}
 
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::InvalidHeader { header } => {
-                write!(f, "Invalid format: Cannot parse header line: '{}'", header)
-            }
-            ParseError::MissingBlankLineAfterHeader => {
-                write!(f, "Invalid format: The line after the header must be empty")
-            }
-        }
-    }
+    #[error("the line after the header must be empty")]
+    MissingBlankLineAfterHeader,
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq)]
