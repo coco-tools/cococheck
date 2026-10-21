@@ -137,7 +137,8 @@ error: invalid header: the scope must not be empty
 When standard output is a terminal, the report is colored.
 
 CoCoCheck exits with status `0` if all commits pass, and with status `1` if any commit fails or an
-error occurs, for example because the repository or a revision cannot be found. This makes it
+error occurs, for example because the repository or a revision cannot be found. Violations of rules
+with the severity [`warning`](#rules) are reported, but do not cause a commit to fail. This makes it
 suitable for use in CI pipelines and Git hooks.
 
 ## Configuration
@@ -156,20 +157,26 @@ parser:
 rules:
   allowed_types:
     enabled: true
+    severity: error
     allowed_types: [build, chore, ci, deps, docs, feat, fix, perf, refactor, revert, style, test]
   blank_line_before_footer:
     enabled: true
+    severity: error
   body_line_length:
     enabled: true
+    severity: error
     max_length: 72
     ignore_urls: true
   header_length:
     enabled: true
+    severity: error
     max_length: 72
   no_description_terminal_punctuation:
     enabled: true
+    severity: error
   required_footers:
     enabled: true
+    severity: error
     tokens: []
 ```
 
@@ -208,14 +215,27 @@ rules:
     enabled: false
 ```
 
+By default, a commit that violates a rule fails the checks. To report the violations of a rule
+without failing the checks, set its `severity` setting to `warning`:
+
+```yaml
+rules:
+  header_length:
+    severity: warning
+```
+
+Warnings are reported like errors, but a commit that only has warnings passes, and CoCoCheck still
+exits with status `0`.
+
 #### `allowed_types`
 
 Requires the commit type to be one of a fixed list of types.
 
-| Setting         | Description                                                    | Default                                                                                              |
-|-----------------|----------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `enabled`       | Whether the rule is applied.                                   | `true`                                                                                               |
-| `allowed_types` | The permitted types. A configured list replaces the default.   | `build`, `chore`, `ci`, `deps`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test` |
+| Setting         | Description                                                  | Default                                                                                              |
+|-----------------|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `enabled`       | Whether the rule is applied.                                 | `true`                                                                                               |
+| `severity`      | Whether a violation is an `error` or a `warning`.            | `error`                                                                                              |
+| `allowed_types` | The permitted types. A configured list replaces the default. | `build`, `chore`, `ci`, `deps`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test` |
 
 #### `blank_line_before_footer`
 
@@ -229,9 +249,10 @@ This is the body.
 Refs: #123
 ```
 
-| Setting   | Description                  | Default |
-|-----------|------------------------------|---------|
-| `enabled` | Whether the rule is applied. | `true`  |
+| Setting    | Description                                       | Default |
+|------------|---------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                      | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
 
 #### `body_line_length`
 
@@ -240,29 +261,32 @@ Limits the length of each line in the body. Lengths are counted in Unicode chara
 Long URLs cannot be wrapped, so by default lines that contain a URL starting with `http://` or
 `https://` are not checked, as in commitlint.
 
-| Setting       | Description                                   | Default |
-|---------------|-----------------------------------------------|---------|
-| `enabled`     | Whether the rule is applied.                  | `true`  |
-| `max_length`  | The maximum number of characters per line.    | `72`    |
-| `ignore_urls` | Whether lines that contain a URL are skipped. | `true`  |
+| Setting       | Description                                       | Default |
+|---------------|---------------------------------------------------|---------|
+| `enabled`     | Whether the rule is applied.                      | `true`  |
+| `severity`    | Whether a violation is an `error` or a `warning`. | `error` |
+| `max_length`  | The maximum number of characters per line.        | `72`    |
+| `ignore_urls` | Whether lines that contain a URL are skipped.     | `true`  |
 
 #### `header_length`
 
 Limits the length of the header line. Lengths are counted in Unicode characters, not bytes.
 
-| Setting      | Description                                     | Default |
-|--------------|-------------------------------------------------|---------|
-| `enabled`    | Whether the rule is applied.                    | `true`  |
-| `max_length` | The maximum number of characters in the header. | `72`    |
+| Setting      | Description                                       | Default |
+|--------------|---------------------------------------------------|---------|
+| `enabled`    | Whether the rule is applied.                      | `true`  |
+| `severity`   | Whether a violation is an `error` or a `warning`. | `error` |
+| `max_length` | The maximum number of characters in the header.   | `72`    |
 
 #### `no_description_terminal_punctuation`
 
 Forbids the description in the header from ending with a period, an exclamation mark, or a
 question mark.
 
-| Setting   | Description                  | Default |
-|-----------|------------------------------|---------|
-| `enabled` | Whether the rule is applied. | `true`  |
+| Setting    | Description                                       | Default |
+|------------|---------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                      | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
 
 #### `required_footers`
 
@@ -279,10 +303,11 @@ Tokens are compared case-insensitively, except for `BREAKING CHANGE` and `BREAKI
 must be uppercase. A footer line in the body, for example because it is not separated from the body
 by a blank line, does not count.
 
-| Setting   | Description                                    | Default |
-|-----------|------------------------------------------------|---------|
-| `enabled` | Whether the rule is applied.                   | `true`  |
-| `tokens`  | The tokens of the footers that are required.   | `[]`    |
+| Setting    | Description                                       | Default |
+|------------|---------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                      | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
+| `tokens`   | The tokens of the footers that are required.      | `[]`    |
 
 ## Project layout
 
