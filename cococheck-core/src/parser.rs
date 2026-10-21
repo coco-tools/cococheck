@@ -19,6 +19,7 @@ pub struct Footer {
 }
 
 #[derive(Debug, PartialEq, thiserror::Error)]
+#[non_exhaustive]
 pub enum ParseError {
     #[error("cannot parse header line '{header}'")]
     InvalidHeader { header: String },

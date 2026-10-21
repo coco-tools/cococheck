@@ -18,6 +18,7 @@ pub struct CommitRange {
 // `Display` implementation of `git2::Error` appends the error class and code, which are not helpful
 // for users.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum GitError {
     #[error("failed to open repository: {}", .0.message())]
     OpenRepository(git2::Error),
