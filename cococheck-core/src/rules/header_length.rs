@@ -38,18 +38,18 @@ impl Rule for HeaderLength {
         self.enabled
     }
 
-    fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
+    fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
         let length = commit.header.chars().count();
         if length > self.max_length {
-            Err(vec![RuleError {
+            vec![RuleError {
                 message: format!(
                     "Header exceeds maximum length of {} characters (actual: {}).",
                     self.max_length, length
                 ),
                 span: Some(0..commit.header.len()),
-            }])
+            }]
         } else {
-            Ok(())
+            vec![]
         }
     }
 }
@@ -67,7 +67,7 @@ mod tests {
             max_length: 50,
             ..Default::default()
         };
-        assert!(rule.check(&commit).is_ok());
+        assert!(rule.check(&commit).is_empty());
     }
 
     #[test]
@@ -79,7 +79,7 @@ mod tests {
             max_length: 20,
             ..Default::default()
         };
-        assert!(rule.check(&commit).is_ok());
+        assert!(rule.check(&commit).is_empty());
     }
 
     #[test]
@@ -93,6 +93,6 @@ mod tests {
             max_length: 30,
             ..Default::default()
         };
-        assert!(rule.check(&long_commit).is_err());
+        assert_eq!(rule.check(&long_commit).len(), 1);
     }
 }

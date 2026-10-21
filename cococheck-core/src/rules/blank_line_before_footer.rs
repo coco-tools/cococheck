@@ -31,9 +31,9 @@ impl Rule for BlankLineBeforeFooter {
         self.enabled
     }
 
-    fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
+    fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
         let Some(body) = &commit.body else {
-            return Ok(());
+            return vec![];
         };
 
         // Footers that are not separated from the body by a blank line are parsed as part of the
@@ -45,14 +45,14 @@ impl Rule for BlankLineBeforeFooter {
             .find(|line| parse_footer_line(line).is_some());
 
         match first_footer_line {
-            Some(line) => Err(vec![RuleError {
+            Some(line) => vec![RuleError {
                 message: format!(
                     "The footer '{}' must be separated from the body by a blank line.",
                     line
                 ),
                 span: Some(0..line.len()),
-            }]),
-            None => Ok(()),
+            }],
+            None => vec![],
         }
     }
 }
@@ -63,33 +63,34 @@ mod tests {
     use crate::parser::{ParserConfig, parse_conventional_commit};
     use pretty_assertions::assert_eq;
 
-    fn check(message: &str) -> Result<(), Vec<RuleError>> {
+    fn check(message: &str) -> Vec<RuleError> {
         let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
         BlankLineBeforeFooter::default().check(&commit)
     }
 
     #[test]
     fn succeeds_for_footer_after_blank_line() {
-        assert!(check("feat: add new feature\n\nThis is the body.\n\nRefs: #1").is_ok());
+        assert!(check("feat: add new feature\n\nThis is the body.\n\nRefs: #1").is_empty());
     }
 
     #[test]
     fn succeeds_without_body() {
-        assert!(check("feat: add new feature").is_ok());
-        assert!(check("feat: add new feature\n\nRefs: #1").is_ok());
+        assert!(check("feat: add new feature").is_empty());
+        assert!(check("feat: add new feature\n\nRefs: #1").is_empty());
     }
 
     #[test]
     fn succeeds_for_footer_like_prose_in_earlier_paragraph() {
         assert!(
-            check("feat: add new feature\n\nIntro.\nNote: this is prose.\n\nMore text.").is_ok()
+            check("feat: add new feature\n\nIntro.\nNote: this is prose.\n\nMore text.").is_empty()
         );
     }
 
     #[test]
     fn succeeds_for_footer_like_first_line_of_last_paragraph() {
         assert!(
-            check("feat: add new feature\n\nNote: this is prose.\nMore text.\n\nRefs: #1").is_ok()
+            check("feat: add new feature\n\nNote: this is prose.\nMore text.\n\nRefs: #1")
+                .is_empty()
         );
     }
 
@@ -97,17 +98,17 @@ mod tests {
     fn fails_for_footer_without_blank_line() {
         assert_eq!(
             check("feat: add new feature\n\nThis is the body.\nRefs: #1\nSigned-off-by: X"),
-            Err(vec![RuleError {
+            vec![RuleError {
                 message: "The footer 'Refs: #1' must be separated from the body by a blank line."
                     .to_string(),
                 span: Some(0..8),
-            }])
+            }]
         );
     }
 
     #[test]
     fn fails_for_footer_without_blank_line_in_last_body_paragraph() {
         let result = check("feat: add new feature\n\nIntro.\n\nThis is the body.\nFixes #123");
-        assert_eq!(result.unwrap_err().len(), 1);
+        assert_eq!(result.len(), 1);
     }
 }

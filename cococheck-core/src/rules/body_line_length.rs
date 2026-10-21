@@ -38,7 +38,7 @@ impl Rule for BodyLineLength {
         self.enabled
     }
 
-    fn check(&self, commit: &ConventionalCommit) -> Result<(), Vec<RuleError>> {
+    fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
         let mut errors = Vec::new();
         if let Some(body) = &commit.body {
             for (i, line) in body.lines().enumerate() {
@@ -57,11 +57,7 @@ impl Rule for BodyLineLength {
             }
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
+        errors
     }
 }
 
@@ -88,7 +84,7 @@ mod tests {
             max_length: 100,
             ..Default::default()
         };
-        assert!(rule.check(&commit).is_ok());
+        assert!(rule.check(&commit).is_empty());
     }
 
     #[test]
@@ -103,7 +99,7 @@ mod tests {
             max_length: 25,
             ..Default::default()
         };
-        assert!(rule.check(&commit).is_ok());
+        assert!(rule.check(&commit).is_empty());
     }
 
     #[test]
@@ -126,27 +122,20 @@ mod tests {
             ..Default::default()
         };
 
-        let result = rule.check(&commit);
-
-        assert!(result.is_err());
-        if let Err(errors) = result {
-            assert_eq!(errors.len(), 2);
-            assert_eq!(
-                errors[0],
+        assert_eq!(
+            rule.check(&commit),
+            vec![
                 RuleError {
                     message: "Body line 2 exceeds maximum length of 12 characters (actual: 26)."
                         .to_string(),
                     span: Some(0..26),
-                }
-            );
-            assert_eq!(
-                errors[1],
+                },
                 RuleError {
                     message: "Body line 4 exceeds maximum length of 12 characters (actual: 27)."
                         .to_string(),
                     span: Some(0..27),
-                }
-            );
-        }
+                },
+            ]
+        );
     }
 }

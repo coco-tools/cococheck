@@ -25,12 +25,7 @@ impl RuleSet {
     pub fn check_commit(&self, commit: &ConventionalCommit) -> Vec<(String, Vec<RuleError>)> {
         self.rules
             .iter()
-            .map(|rule| {
-                (
-                    rule.name().to_string(),
-                    rule.check(commit).err().unwrap_or_default(),
-                )
-            })
+            .map(|rule| (rule.name().to_string(), rule.check(commit)))
             .collect()
     }
 }
