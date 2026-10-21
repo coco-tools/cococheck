@@ -97,6 +97,9 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<CommitInfo>> {
 /// The outcome of checking a single commit.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Outcome {
+    /// The commit was not checked, because its message matches an ignore pattern.
+    Ignored,
+
     /// The commit passed all rules.
     Passed,
 
@@ -132,6 +135,11 @@ impl<'a> Checker<'a> {
     /// Check the message of the `commit` and report its errors and warnings.
     fn check(&self, commit: &CommitInfo) -> Outcome {
         let message = &commit.message;
+
+        if self.config.is_ignored(message) {
+            info!("Commit {} is ignored.", commit.id);
+            return Outcome::Ignored;
+        }
 
         let parsed = match parse_conventional_commit(message, &self.config.parser) {
             Ok(parsed) => parsed,
@@ -196,17 +204,32 @@ impl<'a> Checker<'a> {
     }
 }
 
-/// Print how many commits were checked, and how many of them failed or had warnings.
+/// Print how many commits were checked, and how many of them failed or had warnings, and how many
+/// commits were ignored.
 fn print_summary(outcomes: &[Outcome]) {
     let count = |outcome| outcomes.iter().filter(|&&o| o == outcome).count();
+    let ignored_commits = count(Outcome::Ignored);
+    let checked_commits = outcomes.len() - ignored_commits;
     let failed_commits = count(Outcome::Failed);
     let warned_commits = count(Outcome::PassedWithWarnings);
 
     println!(
         "CoCoCheck finished checking {} commit{}.",
-        outcomes.len(),
-        plural(outcomes.len())
+        checked_commits,
+        plural(checked_commits)
     );
+
+    if ignored_commits > 0 {
+        println!(
+            "{} commit{} ignored.",
+            ignored_commits,
+            if ignored_commits == 1 {
+                " was"
+            } else {
+                "s were"
+            }
+        );
+    }
 
     if warned_commits > 0 {
         println!(
