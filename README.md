@@ -57,13 +57,11 @@ commit that fails:
 Commit 00e0da671f8fe523dc47c78033e776f803798424 failed to parse: cannot parse header line 'Update stuff.'
 Commit 2819a1a133fa4e1fcefb08f90c1bb2bb8f675c93 failed:
 
---- MESSAGE ---
-Message: fix(api): Handle errors.
+error[NoDescriptionTerminalPunctuation]: Description should not end with terminal punctuation (., !, ?).
+  |
+1 | fix(api): Handle errors.
+  |                        ^
 
---- END MESSAGE ---
-
-  Rule 'NoDescriptionTerminalPunctuation' failed:
-  - Description should not end with terminal punctuation (., !, ?). (span: 23..23)
 CoCoCheck finished checking 3 commits.
 2 commits failed the checks.
 ```
