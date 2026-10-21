@@ -3,7 +3,7 @@ use cococheck_core::config::{Config, ConfigError, load_config};
 use cococheck_core::git::get_commits;
 use cococheck_core::parser::parse_conventional_commit;
 use cococheck_core::rules::RuleSet;
-use log::{LevelFilter, debug, error, info, warn};
+use log::{LevelFilter, debug, info};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -45,14 +45,14 @@ fn main() -> ExitCode {
 
     env_logger::Builder::new()
         .filter_level(level)
-        .format(|_, record| writeln!(std::io::stdout(), "{}", record.args()))
+        .format(|buf, record| writeln!(buf, "{}", record.args()))
         .init();
 
     match run(&args) {
         Ok(true) => ExitCode::SUCCESS,
         Ok(false) => ExitCode::FAILURE,
         Err(e) => {
-            error!("Error: {:#}", e);
+            eprintln!("error: {:#}", e);
             ExitCode::FAILURE
         }
     }
@@ -60,7 +60,6 @@ fn main() -> ExitCode {
 
 /// Check the commits selected by `args`. Return whether all commits passed the checks.
 fn run(args: &Cli) -> anyhow::Result<bool> {
-    warn!("Starting CoCoCheck...");
     info!("Checking Git repository at: {}", args.input.display());
 
     let config = load_config_or_default(&args.input)?;
@@ -89,10 +88,10 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
 
                 if failed {
                     failed_commits += 1;
-                    warn!("Commit {} failed:", commit.id);
-                    warn!("\n--- MESSAGE ---");
-                    warn!("Message: {}", message);
-                    warn!("--- END MESSAGE ---\n");
+                    println!("Commit {} failed:", commit.id);
+                    println!("\n--- MESSAGE ---");
+                    println!("Message: {}", message);
+                    println!("--- END MESSAGE ---\n");
                 } else {
                     info!("Commit {} passed.", commit.id);
                 }
@@ -103,13 +102,14 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
                     if errors.is_empty() {
                         debug!("  Rule '{}' passed", rule_name);
                     } else {
-                        warn!("  Rule '{}' failed:", rule_name);
+                        println!("  Rule '{}' failed:", rule_name);
                         for e in errors {
                             match &e.span {
-                                Some(span) => {
-                                    warn!("  - {} (span: {}..{})", e.message, span.start, span.end)
-                                }
-                                None => warn!("  - {}", e.message),
+                                Some(span) => println!(
+                                    "  - {} (span: {}..{})",
+                                    e.message, span.start, span.end
+                                ),
+                                None => println!("  - {}", e.message),
                             }
                         }
                     }
@@ -117,19 +117,19 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
             }
             Err(e) => {
                 failed_commits += 1;
-                warn!("Failed to parse commit message: {}", e)
+                println!("Commit {} failed to parse: {}", commit.id, e);
             }
         }
     }
 
-    warn!(
+    println!(
         "CoCoCheck finished checking {} commit{}.",
         commits.len(),
         if commits.len() == 1 { "" } else { "s" }
     );
 
     if failed_commits > 0 {
-        error!(
+        println!(
             "{} commit{} failed the checks.",
             failed_commits,
             if failed_commits == 1 { "" } else { "s" }
