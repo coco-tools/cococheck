@@ -21,13 +21,19 @@ pub struct Footer {
 
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
-    InvalidFormat(String),
+    InvalidHeader { header: String },
+    MissingBlankLineAfterHeader,
 }
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::InvalidFormat(msg) => write!(f, "Invalid format: {}", msg),
+            ParseError::InvalidHeader { header } => {
+                write!(f, "Invalid format: Cannot parse header line: '{}'", header)
+            }
+            ParseError::MissingBlankLineAfterHeader => {
+                write!(f, "Invalid format: The line after the header must be empty")
+            }
         }
     }
 }
@@ -61,33 +67,14 @@ pub fn parse_conventional_commit(
     let header_regex =
         regex!(r"^(?P<type>\w+)(\((?P<scope>[^)]+)\))?(?P<breaking>!)?: (?P<desc>.+)$");
 
-    let caps = match header_regex.captures(header_line) {
-        Some(caps) => caps,
-        None => {
-            return Err(ParseError::InvalidFormat(format!(
-                "Cannot parse header line: '{}'",
-                header_line
-            )));
-        }
+    let Some(caps) = header_regex.captures(header_line) else {
+        return Err(ParseError::InvalidHeader {
+            header: header_line.to_string(),
+        });
     };
 
-    let next_line = lines.next();
-    if let Some(line) = next_line {
-        if !line.trim().is_empty() {
-            return Err(ParseError::InvalidFormat(
-                "The line after the header must be empty".to_string(),
-            ));
-        }
-    } else {
-        return Ok(ConventionalCommit {
-            header: header_line.to_string(),
-            commit_type: caps["type"].to_string(),
-            scope: caps.name("scope").map(|m| m.as_str().to_string()),
-            is_breaking_change: caps.name("breaking").is_some(),
-            description: caps["desc"].to_string(),
-            body: None,
-            footer: Vec::new(),
-        });
+    if lines.next().is_some_and(|line| !line.trim().is_empty()) {
+        return Err(ParseError::MissingBlankLineAfterHeader);
     }
 
     let paragraphs = split_paragraphs(lines);
@@ -190,9 +177,9 @@ pub fn parse_footer_line(line: &str) -> Option<(String, String)> {
         regex!(r"^(?P<token>BREAKING CHANGE|\[[^]]+]|[\p{L}\p{N}-]+)(?P<sep>: | #)(?P<value>.+)$");
 
     footer_regex.captures(line).map(|caps| {
-        let token = caps.name("token").unwrap().as_str().to_string();
-        let sep = caps.name("sep").unwrap().as_str();
-        let value = caps.name("value").unwrap().as_str();
+        let token = caps["token"].to_string();
+        let sep = &caps["sep"];
+        let value = &caps["value"];
         let value = if sep == " #" {
             format!("#{}", value)
         } else {
@@ -466,28 +453,21 @@ mod tests {
     #[test]
     fn fails_on_invalid_header() {
         let message = "invalid commit message format";
-        let result = parse_conventional_commit(message, &ParserConfig::default());
-        match result {
-            Err(ParseError::InvalidFormat(msg)) => {
-                assert_eq!(
-                    msg,
-                    "Cannot parse header line: 'invalid commit message format'"
-                );
-            }
-            _ => panic!("Expected an InvalidFormat error"),
-        }
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()),
+            Err(ParseError::InvalidHeader {
+                header: "invalid commit message format".to_string()
+            })
+        );
     }
 
     #[test]
     fn fails_on_non_empty_line_after_header() {
         let message = "feat: add new feature\nThis line should not be here";
-        let result = parse_conventional_commit(message, &ParserConfig::default());
-        match result {
-            Err(ParseError::InvalidFormat(msg)) => {
-                assert_eq!(msg, "The line after the header must be empty");
-            }
-            _ => panic!("Expected an InvalidFormat error"),
-        }
+        assert_eq!(
+            parse_conventional_commit(message, &ParserConfig::default()),
+            Err(ParseError::MissingBlankLineAfterHeader)
+        );
     }
 
     #[test]
