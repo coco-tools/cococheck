@@ -1,12 +1,12 @@
 use clap::Parser;
-use cococheck_core::config;
-use cococheck_core::config::{Config, load_config};
-use cococheck_core::git::{GitError, get_commits};
+use cococheck_core::config::{Config, ConfigError, load_config};
+use cococheck_core::git::get_commits;
 use cococheck_core::parser::parse_conventional_commit;
 use cococheck_core::rules::RuleSet;
 use log::{LevelFilter, debug, error, info, warn};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -32,7 +32,7 @@ struct Cli {
     debug: bool,
 }
 
-fn main() {
+fn main() -> ExitCode {
     let args = Cli::parse();
 
     let level = if args.debug {
@@ -48,72 +48,23 @@ fn main() {
         .format(|_, record| writeln!(std::io::stdout(), "{}", record.args()))
         .init();
 
+    match run(&args) {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
+        Err(e) => {
+            error!("Error: {:#}", e);
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Check the commits selected by `args`. Return whether all commits passed the checks.
+fn run(args: &Cli) -> anyhow::Result<bool> {
     warn!("Starting CoCoCheck...");
     info!("Checking Git repository at: {}", args.input.display());
 
-    let config_path = args.input.join("cococheck.yml");
-    let config = match load_config(&config_path) {
-        Ok(cfg) => {
-            info!(
-                "Using config file: {}",
-                config_path
-                    .strip_prefix(&args.input)
-                    .unwrap_or(&config_path)
-                    .display()
-            );
-            cfg
-        }
-        Err(config::ConfigError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound => {
-            info!("No config file found, using default configuration.");
-            Config::default()
-        }
-        Err(e) => {
-            let mut message = e.to_string();
-            let mut source = std::error::Error::source(&e);
-            while let Some(cause) = source {
-                message = format!("{message}: {cause}");
-                source = cause.source();
-            }
-            error!("Error loading config: {}", message);
-            std::process::exit(1);
-        }
-    };
-
-    let range = match get_commits(&args.input, args.from.as_deref(), args.to.as_deref()) {
-        Ok(range) => range,
-        Err(GitError::OpenRepository(e)) => {
-            error!("Error opening repository: {}", e);
-            std::process::exit(1);
-        }
-        Err(GitError::RevisionNotFound {
-            name,
-            revision,
-            error,
-        }) => {
-            error!(
-                "The specified --{} reference '{}' could not be found: {}",
-                name,
-                revision,
-                error.message()
-            );
-            std::process::exit(1);
-        }
-        Err(GitError::NoCommits) => {
-            error!("The repository does not contain any commits.");
-            std::process::exit(1);
-        }
-        Err(GitError::NotAnAncestor { from, to }) => {
-            error!(
-                "The specified --from commit '{}' is not an ancestor of the --to commit '{}'.",
-                from, to
-            );
-            std::process::exit(1);
-        }
-        Err(GitError::Git(e)) => {
-            error!("Error collecting commits: {}", e);
-            std::process::exit(1);
-        }
-    };
+    let config = load_config_or_default(&args.input)?;
+    let range = get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?;
 
     info!(
         "Using commit range {}..{} ({}..{})",
@@ -183,6 +134,30 @@ fn main() {
             failed_commits,
             if failed_commits == 1 { "" } else { "s" }
         );
-        std::process::exit(1);
+    }
+
+    Ok(failed_commits == 0)
+}
+
+/// Load the config file from the repository at `repo_path`, or use the default configuration if
+/// the repository does not contain one.
+fn load_config_or_default(repo_path: &Path) -> Result<Config, ConfigError> {
+    let config_path = repo_path.join("cococheck.yml");
+    match load_config(&config_path) {
+        Ok(config) => {
+            info!(
+                "Using config file: {}",
+                config_path
+                    .strip_prefix(repo_path)
+                    .unwrap_or(&config_path)
+                    .display()
+            );
+            Ok(config)
+        }
+        Err(ConfigError::Io(ref e)) if e.kind() == std::io::ErrorKind::NotFound => {
+            info!("No config file found, using default configuration.");
+            Ok(Config::default())
+        }
+        Err(e) => Err(e),
     }
 }
