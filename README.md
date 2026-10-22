@@ -426,8 +426,8 @@ version, update `rust-version` in [`Cargo.toml`](Cargo.toml) and the MSRV job in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) together.
 
 Commit messages in this repository follow the Conventional Commits specification. The CI pipeline
-checks the commits of every pull request with the CoCoCheck version from that pull request. To run
-the same check locally:
+checks the commits of every pull request, and the commits pushed to `main`, with the CoCoCheck
+version that contains them. To run the same check locally:
 
 ```shell
 cargo run -p cococheck-cli -- main..
