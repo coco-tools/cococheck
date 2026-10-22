@@ -1,7 +1,7 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
     AllowedTypes, BlankLineBeforeFooter, BodyLineLength, HeaderLength,
-    NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig,
+    NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, TypeCase,
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
@@ -120,6 +120,9 @@ pub struct RulesConfig {
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub required_footers: RuleConfig<RequiredFooters>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub type_case: RuleConfig<TypeCase>,
 }
 
 /// Deserialize a YAML null value, like an empty `rules:` key, as the default value, instead of
@@ -202,6 +205,7 @@ mod tests {
             RuleConfig::default()
         );
         assert_eq!(config.rules.required_footers, RuleConfig::default());
+        assert_eq!(config.rules.type_case, RuleConfig::default());
     }
 
     #[test]
@@ -351,6 +355,7 @@ mod tests {
             RuleConfig::default()
         );
         assert_eq!(config.rules.required_footers, RuleConfig::default());
+        assert_eq!(config.rules.type_case, RuleConfig::default());
     }
 
     #[test]
