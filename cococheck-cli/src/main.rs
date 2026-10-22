@@ -44,13 +44,9 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = Format::Text)]
     format: Format,
 
-    /// Enable info logging
-    #[arg(long)]
-    info: bool,
-
-    /// Enable debug logging
-    #[arg(long)]
-    debug: bool,
+    /// Log informational messages, or also debug messages if given twice
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
 }
 
 /// The format of the report.
@@ -66,12 +62,10 @@ enum Format {
 fn main() -> ExitCode {
     let args = Cli::parse();
 
-    let level = if args.debug {
-        LevelFilter::Debug
-    } else if args.info {
-        LevelFilter::Info
-    } else {
-        LevelFilter::Warn
+    let level = match args.verbose {
+        0 => LevelFilter::Warn,
+        1 => LevelFilter::Info,
+        _ => LevelFilter::Debug,
     };
 
     env_logger::Builder::new()
@@ -731,6 +725,18 @@ mod tests {
                 "summary": { "checked": 4, "ignored": 1, "passed_with_warnings": 1, "failed": 2 }
             })
         );
+    }
+
+    #[test]
+    fn verbose_can_be_given_multiple_times() {
+        let args = Cli::try_parse_from(["cococheck"]).unwrap();
+        assert_eq!(args.verbose, 0);
+
+        let args = Cli::try_parse_from(["cococheck", "--verbose"]).unwrap();
+        assert_eq!(args.verbose, 1);
+
+        let args = Cli::try_parse_from(["cococheck", "-vv"]).unwrap();
+        assert_eq!(args.verbose, 2);
     }
 
     #[test]
