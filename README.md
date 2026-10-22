@@ -199,6 +199,10 @@ parser:
   footer_detection: last_paragraph
 
 rules:
+  allowed_scopes:
+    enabled: true
+    severity: error
+    scopes: []
   allowed_types:
     enabled: true
     severity: error
@@ -316,6 +320,18 @@ rules:
 
 Warnings are reported like errors, but a commit that only has warnings passes, and CoCoCheck still
 exits with status `0`.
+
+#### `allowed_scopes`
+
+Requires the scope to be one of a list of scopes. A header can name multiple scopes separated by
+commas, like `feat(cli, core): Add a feature`, and each of them must be allowed. A commit without a
+scope passes. By default, the list is empty and any scope is allowed.
+
+| Setting    | Description                                                 | Default |
+|------------|-------------------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                                | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`.           | `error` |
+| `scopes`   | The permitted scopes. If it is empty, any scope is allowed. | `[]`    |
 
 #### `allowed_types`
 
