@@ -1,5 +1,5 @@
 use crate::message::{CleanupMode, MessageCleanup};
-use git2::{ErrorCode, Oid, Repository, Sort};
+use git2::{Commit, ErrorCode, Oid, Repository, Sort};
 use std::path::Path;
 
 #[derive(Debug, PartialEq)]
@@ -10,8 +10,10 @@ pub struct CommitInfo {
 
 #[derive(Debug)]
 pub struct CommitRange {
-    /// The resolved `from` commit, or `None` if the range starts at the root commits.
+    /// The resolved `from` commit, or `None` if the range starts at the root commits or contains a
+    /// single selected commit.
     pub from: Option<String>,
+    /// The resolved `to` commit, or the single selected commit.
     pub to: String,
     pub commits: Vec<CommitInfo>,
 }
@@ -25,14 +27,21 @@ pub enum GitError {
     #[error("failed to open repository: {}", .0.message())]
     OpenRepository(git2::Error),
 
-    #[error("the '{name}' revision '{revision}' could not be found: {}", .error.message())]
+    #[error(
+        "the {} '{revision}' could not be found: {}",
+        describe_revision(name),
+        .error.message()
+    )]
     RevisionNotFound {
         name: &'static str,
         revision: String,
         error: git2::Error,
     },
 
-    #[error("the '{name}' revision '{revision}' does not point to a commit")]
+    #[error(
+        "the {} '{revision}' does not point to a commit",
+        describe_revision(name)
+    )]
     NotACommit {
         name: &'static str,
         revision: String,
@@ -41,8 +50,20 @@ pub enum GitError {
     #[error("the repository does not contain any commits")]
     NoCommits,
 
+    #[error("the symmetric difference '{0}' is not supported, use a range like 'A..B' instead")]
+    SymmetricDifference(String),
+
     #[error("failed to read commits: {}", .0.message())]
     Git(git2::Error),
+}
+
+/// Describe the revision with the given `name` in error messages: `revision` for a single revision,
+/// and e.g. `'from' revision` for one end of a range.
+fn describe_revision(name: &str) -> String {
+    match name {
+        "revision" => name.to_string(),
+        _ => format!("'{name}' revision"),
+    }
 }
 
 impl From<git2::Error> for GitError {
@@ -83,6 +104,34 @@ pub fn get_commits(
         from: from_oid.map(|oid| oid.to_string()),
         to: to_oid.to_string(),
         commits,
+    })
+}
+
+/// Get the commits of the repository at `repo_path` that are selected by `revisions`, ordered from
+/// oldest to newest. Like `git show`, a single revision selects only that commit, and a range
+/// `from..to` selects the same commits as [`get_commits`]. An omitted end of a range means `HEAD`.
+/// The symmetric difference `a...b` is not supported.
+pub fn get_commits_for_revisions(
+    repo_path: &Path,
+    revisions: &str,
+) -> Result<CommitRange, GitError> {
+    if revisions.contains("...") {
+        return Err(GitError::SymmetricDifference(revisions.to_string()));
+    }
+
+    if let Some((from, to)) = revisions.split_once("..") {
+        let from = if from.is_empty() { "HEAD" } else { from };
+        let to = (!to.is_empty()).then_some(to);
+        return get_commits(repo_path, Some(from), to);
+    }
+
+    let repo = Repository::open(repo_path).map_err(GitError::OpenRepository)?;
+    let oid = resolve_revision(&repo, "revision", revisions)?;
+
+    Ok(CommitRange {
+        from: None,
+        to: oid.to_string(),
+        commits: vec![commit_info(&repo.find_commit(oid)?)],
     })
 }
 
@@ -161,14 +210,17 @@ fn commits_between(
 
     let mut commits = Vec::new();
     for oid in revwalk {
-        let commit = repo.find_commit(oid?)?;
-        commits.push(CommitInfo {
-            id: commit.id().to_string(),
-            message: String::from_utf8_lossy(commit.message_bytes()).into_owned(),
-        });
+        commits.push(commit_info(&repo.find_commit(oid?)?));
     }
 
     Ok(commits)
+}
+
+fn commit_info(commit: &Commit) -> CommitInfo {
+    CommitInfo {
+        id: commit.id().to_string(),
+        message: String::from_utf8_lossy(commit.message_bytes()).into_owned(),
+    }
 }
 
 #[cfg(test)]
@@ -434,6 +486,92 @@ mod tests {
         let range = get_commits(dir.path(), None, None).unwrap();
 
         assert_eq!(messages(&range), vec!["feat: Add caf\u{FFFD}"]);
+    }
+
+    #[test]
+    fn returns_only_a_single_selected_commit() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second", "third"]);
+
+        let range = get_commits_for_revisions(dir.path(), "HEAD~1").unwrap();
+
+        assert_eq!(messages(&range), vec!["second"]);
+        assert_eq!(range.from, None);
+        assert_eq!(range.to, oids[1].to_string());
+    }
+
+    #[test]
+    fn returns_the_commits_of_a_selected_range() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second", "third", "fourth"]);
+
+        let range = get_commits_for_revisions(dir.path(), "HEAD~3..HEAD~1").unwrap();
+
+        assert_eq!(messages(&range), vec!["second", "third"]);
+        assert_eq!(range.from, Some(oids[0].to_string()));
+        assert_eq!(range.to, oids[2].to_string());
+    }
+
+    #[test]
+    fn uses_head_for_an_omitted_end_of_a_selected_range() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second", "third"]);
+        let first = oids[0].to_string();
+
+        let to_head = get_commits_for_revisions(dir.path(), &format!("{first}..")).unwrap();
+        let from_head = get_commits_for_revisions(dir.path(), &format!("..{first}")).unwrap();
+
+        assert_eq!(messages(&to_head), vec!["second", "third"]);
+        assert_eq!(messages(&from_head), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn fails_for_a_symmetric_difference() {
+        let (dir, repo) = init_repo();
+        linear_history(&repo, &["first", "second"]);
+
+        let result = get_commits_for_revisions(dir.path(), "HEAD~1...HEAD");
+
+        assert!(matches!(result, Err(GitError::SymmetricDifference(_))));
+    }
+
+    #[test]
+    fn fails_for_unknown_revisions() {
+        let (dir, repo) = init_repo();
+        linear_history(&repo, &["first"]);
+
+        let single = get_commits_for_revisions(dir.path(), "unknown");
+        let range = get_commits_for_revisions(dir.path(), "HEAD..unknown");
+
+        assert!(matches!(
+            single,
+            Err(GitError::RevisionNotFound {
+                name: "revision",
+                ..
+            })
+        ));
+        assert!(matches!(
+            range,
+            Err(GitError::RevisionNotFound { name: "to", .. })
+        ));
+    }
+
+    #[test]
+    fn describes_revisions_in_error_messages() {
+        let (dir, repo) = init_repo();
+        linear_history(&repo, &["first"]);
+
+        let single = get_commits_for_revisions(dir.path(), "HEAD^{tree}").unwrap_err();
+        let range = get_commits_for_revisions(dir.path(), "HEAD^{tree}..").unwrap_err();
+
+        assert_eq!(
+            single.to_string(),
+            "the revision 'HEAD^{tree}' does not point to a commit"
+        );
+        assert_eq!(
+            range.to_string(),
+            "the 'from' revision 'HEAD^{tree}' does not point to a commit"
+        );
     }
 
     #[test]
