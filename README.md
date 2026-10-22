@@ -337,6 +337,12 @@ is followed by another one, which is parsed as body with the default `footer_det
 Use the `trailing_paragraphs` [footer detection](#parser) to parse it as footers. Lines in fenced
 code blocks, which start and end with ```` ``` ```` or `~~~`, are not reported either.
 
+To not report prose that looks like a footer, like the second line of
+`There are multiple\nimplementations: One for files and one for databases.`, a footer line is only
+reported if the line before it ends with `.`, `!`, or `?`, possibly followed by closing brackets or
+quotes, ends a code block, or is a footer line itself. A footer after a line without punctuation,
+like `This is the body\nRefs: #123`, is therefore not reported.
+
 | Setting    | Description                                       | Default |
 |------------|---------------------------------------------------|---------|
 | `enabled`  | Whether the rule is applied.                      | `true`  |
