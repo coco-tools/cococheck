@@ -1,7 +1,8 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
     AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLineLength, DescriptionCase,
-    HeaderLength, NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, TypeCase,
+    HeaderLength, NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, ScopePresence,
+    TypeCase,
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
@@ -128,6 +129,9 @@ pub struct RulesConfig {
     pub required_footers: RuleConfig<RequiredFooters>,
 
     #[serde(default, deserialize_with = "null_as_default")]
+    pub scope_presence: RuleConfig<ScopePresence>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
     pub type_case: RuleConfig<TypeCase>,
 }
 
@@ -196,7 +200,7 @@ pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
 mod tests {
     use super::*;
     use crate::parser::FooterDetection;
-    use crate::rules::{DescriptionCaseMode, Severity};
+    use crate::rules::{DescriptionCaseMode, Presence, Severity};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -213,6 +217,7 @@ mod tests {
             RuleConfig::default()
         );
         assert_eq!(config.rules.required_footers, RuleConfig::default());
+        assert_eq!(config.rules.scope_presence, RuleConfig::default());
         assert_eq!(config.rules.type_case, RuleConfig::default());
     }
 
@@ -365,6 +370,7 @@ mod tests {
             RuleConfig::default()
         );
         assert_eq!(config.rules.required_footers, RuleConfig::default());
+        assert_eq!(config.rules.scope_presence, RuleConfig::default());
         assert_eq!(config.rules.type_case, RuleConfig::default());
     }
 
@@ -547,6 +553,22 @@ mod tests {
             case: title
         "#;
         assert!(matches!(parse_config(yaml), Err(ConfigError::Parse { .. })));
+    }
+
+    #[test]
+    fn read_scope_presence() {
+        for (value, presence) in [
+            ("optional", Presence::Optional),
+            ("required", Presence::Required),
+            ("forbidden", Presence::Forbidden),
+        ] {
+            let yaml = format!("rules:\n  scope_presence:\n    scope: {value}\n");
+            let config = parse_config(&yaml).unwrap();
+            assert_eq!(
+                config.rules.scope_presence.rule,
+                ScopePresence { scope: presence }
+            );
+        }
     }
 
     #[test]
