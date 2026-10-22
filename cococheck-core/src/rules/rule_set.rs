@@ -23,6 +23,7 @@ impl RuleSet {
         rule_set.add(&rules.allowed_types);
         rule_set.add(&rules.blank_line_before_footer);
         rule_set.add(&rules.body_line_length);
+        rule_set.add(&rules.description_case);
         rule_set.add(&rules.header_length);
         rule_set.add(&rules.no_description_terminal_punctuation);
         rule_set.add(&rules.required_footers);
@@ -72,6 +73,7 @@ mod tests {
             vec![
                 "AllowedTypes",
                 "BodyLineLength",
+                "DescriptionCase",
                 "NoDescriptionTerminalPunctuation",
                 "RequiredFooters",
                 "TypeCase"
@@ -104,6 +106,7 @@ mod tests {
                 ("AllowedTypes".to_string(), Severity::Error, 0),
                 ("BlankLineBeforeFooter".to_string(), Severity::Error, 0),
                 ("BodyLineLength".to_string(), Severity::Error, 0),
+                ("DescriptionCase".to_string(), Severity::Error, 0),
                 ("HeaderLength".to_string(), Severity::Warning, 1),
                 (
                     "NoDescriptionTerminalPunctuation".to_string(),
