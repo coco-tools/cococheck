@@ -335,7 +335,8 @@ Refs: #123
 
 A paragraph that starts with a footer line is not reported, because it is a footer paragraph that
 is followed by another one, which is parsed as body with the default `footer_detection` setting.
-Use the `trailing_paragraphs` [footer detection](#parser) to parse it as footers.
+Use the `trailing_paragraphs` [footer detection](#parser) to parse it as footers. Lines in fenced
+code blocks, which start and end with ```` ``` ```` or `~~~`, are not reported either.
 
 | Setting    | Description                                       | Default |
 |------------|---------------------------------------------------|---------|

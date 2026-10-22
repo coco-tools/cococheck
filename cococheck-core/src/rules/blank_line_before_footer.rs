@@ -1,5 +1,5 @@
 use super::{Rule, RuleError};
-use crate::parser::{ConventionalCommit, parse_footer_line};
+use crate::parser::{ConventionalCommit, Line, parse_footer_line};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -32,10 +32,15 @@ impl Rule for BlankLineBeforeFooter {
             return vec![];
         }
 
+        let in_code_block = code_block_lines(lines);
         let first_footer_line = last_paragraph
             .iter()
+            .zip(&in_code_block[last_paragraph_start..])
             .skip(1)
-            .find(|line| parse_footer_line(&line.text).is_some());
+            .find(|(line, in_code_block)| {
+                !**in_code_block && parse_footer_line(&line.text).is_some()
+            })
+            .map(|(line, _)| line);
 
         match first_footer_line {
             Some(line) => vec![RuleError {
@@ -48,6 +53,33 @@ impl Rule for BlankLineBeforeFooter {
             None => vec![],
         }
     }
+}
+
+/// Return for each of the `lines` whether it is part of a fenced code block, including the fences.
+/// A code block can contain empty lines, so it can span multiple paragraphs.
+fn code_block_lines(lines: &[Line]) -> Vec<bool> {
+    let mut fence: Option<&str> = None;
+
+    lines
+        .iter()
+        .map(|line| {
+            let text = line.text.trim_start();
+            match fence {
+                Some(open) => {
+                    if text.starts_with(open) {
+                        fence = None;
+                    }
+                    true
+                }
+                None => {
+                    fence = ["```", "~~~"]
+                        .into_iter()
+                        .find(|marker| text.starts_with(marker));
+                    fence.is_some()
+                }
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -100,6 +132,24 @@ mod tests {
             Fixes #803.\nFixes #882.\n\n\
             Signed-off-by: Jane Doe <jane@example.com>";
         assert!(check(message).is_empty());
+    }
+
+    #[test]
+    fn succeeds_for_footer_like_lines_in_code_blocks() {
+        let message = "fix: Fix the response\n\nIt now returns:\n```\ndata: {\n\t\"process_id\": \"522415\"\n}\n```";
+        assert!(check(message).is_empty());
+
+        let message =
+            "fix: Fix the response\n\nIt now returns:\n~~~\nfirst\n\nsecond\ndata: {}\n~~~";
+        assert!(check(message).is_empty());
+    }
+
+    #[test]
+    fn fails_for_footer_after_code_block() {
+        let message = "fix: Fix the response\n\nIt now returns:\n```\ndata: {}\n```\nRefs: #1";
+        let result = check(message);
+        assert_eq!(result.len(), 1);
+        assert_eq!(&message[result[0].span.clone().unwrap()], "Refs: #1");
     }
 
     #[test]
