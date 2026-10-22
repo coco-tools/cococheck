@@ -230,6 +230,10 @@ rules:
     enabled: true
     severity: error
     tokens: []
+  scope_presence:
+    enabled: true
+    severity: error
+    scope: optional
   type_case:
     enabled: true
     severity: error
@@ -325,7 +329,8 @@ exits with status `0`.
 
 Requires the scope to be one of a list of scopes. A header can name multiple scopes separated by
 commas, like `feat(cli, core): Add a feature`, and each of them must be allowed. A commit without a
-scope passes. By default, the list is empty and any scope is allowed.
+scope passes; use [`scope_presence`](#scope_presence) to require a scope. By default, the list is
+empty and any scope is allowed.
 
 | Setting    | Description                                                 | Default |
 |------------|-------------------------------------------------------------|---------|
@@ -443,6 +448,22 @@ by a blank line, does not count.
 | `enabled`  | Whether the rule is applied.                      | `true`  |
 | `severity` | Whether a violation is an `error` or a `warning`. | `error` |
 | `tokens`   | The tokens of the footers that are required.      | `[]`    |
+
+#### `scope_presence`
+
+Requires every commit to have a scope, like `feat(core): Add a feature`, or forbids scopes.
+
+`scope` accepts the following values:
+
+- `optional`: A commit can have a scope, but does not have to.
+- `required`: A commit must have a scope.
+- `forbidden`: A commit must not have a scope.
+
+| Setting    | Description                                       | Default    |
+|------------|---------------------------------------------------|------------|
+| `enabled`  | Whether the rule is applied.                      | `true`     |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error`    |
+| `scope`    | Whether a scope is required, forbidden, or not.   | `optional` |
 
 #### `type_case`
 
