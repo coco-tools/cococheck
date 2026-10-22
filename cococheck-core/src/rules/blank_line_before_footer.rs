@@ -19,7 +19,20 @@ impl Rule for BlankLineBeforeFooter {
             .iter()
             .rposition(|line| line.text.is_empty())
             .map_or(0, |i| i + 1);
-        let first_footer_line = lines[last_paragraph_start..]
+        let last_paragraph = &lines[last_paragraph_start..];
+
+        // A paragraph that starts with a footer is not a body paragraph with a footer that misses
+        // a blank line, but a footer paragraph that is followed by another one. It is parsed as
+        // body because only the last paragraph can contain footers with the default footer
+        // detection.
+        if last_paragraph
+            .first()
+            .is_some_and(|line| parse_footer_line(&line.text).is_some())
+        {
+            return vec![];
+        }
+
+        let first_footer_line = last_paragraph
             .iter()
             .skip(1)
             .find(|line| parse_footer_line(&line.text).is_some());
@@ -75,6 +88,21 @@ mod tests {
     }
 
     #[test]
+    fn succeeds_for_footer_paragraph_followed_by_another_footer_paragraph() {
+        let message = "feat(orchestrator): Set the transaction isolation level to serializable\n\n\
+            When handling jobs, it is necessary to avoid phantom reads [1].\n\n\
+            [1]: https://www.postgresql.org/docs/current/transaction-iso.html\n\
+            [2]: https://wiki.postgresql.org/wiki/Serializable\n\n\
+            Signed-off-by: Jane Doe <jane@example.com>";
+        assert!(check(message).is_empty());
+
+        let message = "fix: Fix the bugs\n\nThis is the body.\n\n\
+            Fixes #803.\nFixes #882.\n\n\
+            Signed-off-by: Jane Doe <jane@example.com>";
+        assert!(check(message).is_empty());
+    }
+
+    #[test]
     fn fails_for_footer_without_blank_line() {
         assert_eq!(
             check("feat: add new feature\n\nThis is the body.\nRefs: #1\nSigned-off-by: X"),
@@ -82,6 +110,18 @@ mod tests {
                 message: "The footer 'Refs: #1' must be separated from the body by a blank line."
                     .to_string(),
                 span: Some(41..49),
+            }]
+        );
+    }
+
+    #[test]
+    fn fails_for_footer_after_single_body_line() {
+        assert_eq!(
+            check("feat: add new feature\n\nThis is the body.\nRefs: #123"),
+            vec![RuleError {
+                message: "The footer 'Refs: #123' must be separated from the body by a blank line."
+                    .to_string(),
+                span: Some(41..51),
             }]
         );
     }
