@@ -73,37 +73,38 @@ CoCoCheck finished checking 3 commits.
 
 ### Options
 
-| Option                  | Description                                          | Default         |
-|-------------------------|------------------------------------------------------|-----------------|
-| `-i`, `--input <INPUT>` | Path to the Git repository to check.                 | `.`             |
-| `-c`, `--config <PATH>` | Path to the [configuration](#configuration) file.    | See below       |
-| `--from <FROM>`         | First commit to check. The commit itself is checked. | The root commit |
-| `--to <TO>`             | Last commit to check. The commit itself is checked.  | `HEAD`          |
-| `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).     |                 |
-| `--info`                | Log informational messages, such as passed commits.  |                 |
-| `--debug`               | Log debug messages, including the parsed commits.    |                 |
-| `-h`, `--help`          | Print help.                                          |                 |
-| `-V`, `--version`       | Print the version.                                   |                 |
+| Option                  | Description                                                  | Default     |
+|-------------------------|--------------------------------------------------------------|-------------|
+| `-i`, `--input <INPUT>` | Path to the Git repository to check.                         | `.`         |
+| `-c`, `--config <PATH>` | Path to the [configuration](#configuration) file.            | See below   |
+| `--from <FROM>`         | Check only commits after this one. It is not checked itself. | All commits |
+| `--to <TO>`             | Last commit to check. The commit itself is checked.          | `HEAD`      |
+| `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).             |             |
+| `--info`                | Log informational messages, such as passed commits.          |             |
+| `--debug`               | Log debug messages, including the parsed commits.            |             |
+| `-h`, `--help`          | Print help.                                                  |             |
+| `-V`, `--version`       | Print the version.                                           |             |
 
 Without `--config`, CoCoCheck reads `cococheck.yml` from the repository given by `--input`, and
 uses the default configuration if that file does not exist. A file given with `--config` must exist;
 otherwise CoCoCheck fails with an error.
 
 `--from` and `--to` accept any Git revision that resolves to a commit, such as a commit ID, a branch
-or tag name, or an expression like `HEAD~3`. The range is inclusive at both ends, unlike Git's
-`A..B` notation, and `--from` must be an ancestor of `--to`.
+or tag name, or an expression like `HEAD~3`. Like Git's `FROM..TO` notation, the range contains
+the commits that are reachable from `--to`, but not from `--from`, so `--from` itself is not
+checked. `--from` must be an ancestor of `--to`. If both are the same commit, the range is empty and
+the check passes.
 
 For example, to check the last three commits on the current branch:
 
 ```shell
-cococheck --from HEAD~2
+cococheck --from HEAD~3
 ```
 
-To check only the commits of a feature branch that are not on `main`, start at the oldest of them.
-The branch must contain at least one such commit:
+To check only the commits of a feature branch that are not on `main`:
 
 ```shell
-cococheck --from "$(git rev-list --reverse main..HEAD | head -n 1)"
+cococheck --from main
 ```
 
 ### `commit-msg` hook

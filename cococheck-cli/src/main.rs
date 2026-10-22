@@ -22,7 +22,7 @@ struct Cli {
     #[arg(short, long)]
     config: Option<PathBuf>,
 
-    /// Start commit (inclusive, default: first commit)
+    /// Check only the commits after this one (exclusive, like Git's FROM..TO, default: all commits)
     #[arg(long)]
     from: Option<String>,
 
@@ -102,13 +102,13 @@ struct Message {
 fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
     let range = get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?;
 
-    info!(
-        "Using commit range {}..{} ({}..{})",
-        args.from.as_deref().unwrap_or("<first commit>"),
-        args.to.as_deref().unwrap_or("HEAD"),
-        range.from,
-        range.to,
-    );
+    let to = args.to.as_deref().unwrap_or("HEAD");
+    match (&args.from, &range.from) {
+        (Some(from), Some(from_id)) => {
+            info!("Using commit range {from}..{to} ({from_id}..{})", range.to)
+        }
+        _ => info!("Using all commits up to {to} ({})", range.to),
+    }
 
     let messages = range
         .commits

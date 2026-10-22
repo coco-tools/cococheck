@@ -10,7 +10,8 @@ pub struct CommitInfo {
 
 #[derive(Debug)]
 pub struct CommitRange {
-    pub from: String,
+    /// The resolved `from` commit, or `None` if the range starts at the root commits.
+    pub from: Option<String>,
     pub to: String,
     pub commits: Vec<CommitInfo>,
 }
@@ -53,9 +54,10 @@ impl From<git2::Error> for GitError {
     }
 }
 
-/// Get the commits from `from` to `to` (both inclusive) of the repository at `repo_path`, ordered
-/// from oldest to newest. If `from` is not set, start at the first commit. If `to` is not set, end
-/// at `HEAD`.
+/// Get the commits of the repository at `repo_path` that are reachable from `to`, but not from
+/// `from`, ordered from oldest to newest. Like Git's `from..to` notation, this excludes `from`
+/// itself. If `from` is not set, include all commits up to the root commits. If `to` is not set,
+/// end at `HEAD`.
 pub fn get_commits(
     repo_path: &Path,
     from: Option<&str>,
@@ -83,15 +85,15 @@ pub fn get_commits(
                     to: to.unwrap_or("HEAD").to_string(),
                 });
             }
-            from_oid
+            Some(from_oid)
         }
-        None => find_first_commit(&repo)?,
+        None => None,
     };
 
-    let commits = commits_between_inclusive(&repo, from_oid, to_oid)?;
+    let commits = commits_between(&repo, from_oid, to_oid)?;
 
     Ok(CommitRange {
-        from: from_oid.to_string(),
+        from: from_oid.map(|oid| oid.to_string()),
         to: to_oid.to_string(),
         commits,
     })
@@ -156,25 +158,16 @@ fn resolve_revision(
     Ok(commit.id())
 }
 
-fn find_first_commit(repo: &Repository) -> Result<Oid, GitError> {
-    let mut revwalk = repo.revwalk()?;
-    revwalk.push_head()?;
-    revwalk.set_sorting(Sort::REVERSE)?;
-    revwalk.next().transpose()?.ok_or(GitError::NoCommits)
-}
-
-fn commits_between_inclusive(
+fn commits_between(
     repo: &Repository,
-    from: Oid,
+    from: Option<Oid>,
     to: Oid,
 ) -> Result<Vec<CommitInfo>, git2::Error> {
-    let from_commit = repo.find_commit(from)?;
-
     let mut revwalk = repo.revwalk()?;
     revwalk.push(to)?;
 
-    for parent_oid in from_commit.parent_ids() {
-        revwalk.hide(parent_oid)?;
+    if let Some(from) = from {
+        revwalk.hide(from)?;
     }
 
     revwalk.set_sorting(Sort::TOPOLOGICAL | Sort::REVERSE)?;
@@ -302,37 +295,67 @@ mod tests {
         let range = get_commits(dir.path(), None, None).unwrap();
 
         assert_eq!(messages(&range), vec!["first", "second", "third"]);
-        assert_eq!(range.from, oids[0].to_string());
+        assert_eq!(range.from, None);
         assert_eq!(range.to, oids[2].to_string());
     }
 
     #[test]
-    fn returns_commits_between_from_and_to_inclusive() {
+    fn returns_commits_after_from_up_to_and_including_to() {
         let (dir, repo) = init_repo();
         let oids = linear_history(&repo, &["first", "second", "third", "fourth"]);
 
         let range = get_commits(
             dir.path(),
-            Some(&oids[1].to_string()),
+            Some(&oids[0].to_string()),
             Some(&oids[2].to_string()),
         )
         .unwrap();
 
         assert_eq!(messages(&range), vec!["second", "third"]);
+        assert_eq!(range.from, Some(oids[0].to_string()));
+        assert_eq!(range.to, oids[2].to_string());
     }
 
     #[test]
-    fn excludes_merged_branches_if_from_is_a_merge_commit() {
+    fn returns_no_commits_if_from_equals_to() {
+        let (dir, repo) = init_repo();
+        linear_history(&repo, &["first", "second"]);
+
+        let range = get_commits(dir.path(), Some("HEAD"), None).unwrap();
+
+        assert_eq!(messages(&range), Vec::<&str>::new());
+    }
+
+    #[test]
+    fn excludes_commits_merged_from_the_from_branch() {
+        let (dir, repo) = init_repo();
+        let base = commit(&repo, "base", &[]);
+        let main = commit(&repo, "main", &[base]);
+        let feature = commit(&repo, "feature", &[base]);
+        let merge = commit(&repo, "merge main", &[feature, main]);
+        commit(&repo, "after merge", &[merge]);
+
+        let range = get_commits(dir.path(), Some(&main.to_string()), None).unwrap();
+
+        assert_eq!(
+            messages(&range),
+            vec!["feature", "merge main", "after merge"]
+        );
+    }
+
+    #[test]
+    fn includes_all_parents_of_a_merge_commit_without_from() {
         let (dir, repo) = init_repo();
         let base = commit(&repo, "base", &[]);
         let main = commit(&repo, "main", &[base]);
         let side = commit(&repo, "side", &[base]);
-        let merge = commit(&repo, "merge", &[main, side]);
-        commit(&repo, "after merge", &[merge]);
+        commit(&repo, "merge", &[main, side]);
 
-        let range = get_commits(dir.path(), Some(&merge.to_string()), None).unwrap();
+        let range = get_commits(dir.path(), None, None).unwrap();
 
-        assert_eq!(messages(&range), vec!["merge", "after merge"]);
+        let mut messages = messages(&range);
+        messages.sort();
+        assert_eq!(messages, vec!["base", "main", "merge", "side"]);
     }
 
     #[test]
@@ -347,8 +370,8 @@ mod tests {
 
         let range = get_commits(dir.path(), Some("v1"), Some("v2")).unwrap();
 
-        assert_eq!(messages(&range), vec!["second", "third"]);
-        assert_eq!(range.from, oids[1].to_string());
+        assert_eq!(messages(&range), vec!["third"]);
+        assert_eq!(range.from, Some(oids[1].to_string()));
         assert_eq!(range.to, oids[2].to_string());
     }
 
