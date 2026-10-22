@@ -4,7 +4,7 @@ use clap::Parser;
 use cococheck_core::config::{Config, ConfigError, load_config};
 use cococheck_core::git::{get_commits, get_commits_for_revisions, message_cleanup};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
-use cococheck_core::rules::{RuleSet, Severity};
+use cococheck_core::rules::{RuleResult, RuleSet, Severity};
 use log::{LevelFilter, debug, info};
 use std::io::{IsTerminal, Read, Write};
 use std::ops::Range;
@@ -85,10 +85,14 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     };
 
     let checker = Checker::new(&config);
-    let outcomes: Vec<Outcome> = messages
-        .iter()
-        .map(|message| checker.check(message))
-        .collect();
+    let reporter = TextReporter::new();
+    let mut outcomes = Vec::new();
+
+    for message in &messages {
+        let report = checker.check(message);
+        reporter.print_report(&report);
+        outcomes.push(report.outcome);
+    }
 
     print_summary(&outcomes);
 
@@ -171,46 +175,48 @@ enum Outcome {
     Failed,
 }
 
-/// Checks commit messages with the configured parser and rules, and reports the failures.
+/// The result of checking a single commit message.
+struct Report<'a> {
+    message: &'a Message,
+    outcome: Outcome,
+    /// The reason why the message could not be parsed, if it could not be parsed.
+    parse_error: Option<ParseError>,
+    /// The results of all enabled rules. It is empty if the message is ignored or could not be
+    /// parsed.
+    results: Vec<RuleResult>,
+}
+
+/// Checks commit messages with the configured parser and rules.
 struct Checker<'a> {
     config: &'a Config,
     rule_set: RuleSet,
-    renderer: Renderer,
 }
 
 impl<'a> Checker<'a> {
     fn new(config: &'a Config) -> Self {
-        let renderer = if std::io::stdout().is_terminal() {
-            Renderer::styled()
-        } else {
-            Renderer::plain()
-        };
-
         Checker {
             config,
             rule_set: RuleSet::new(config),
-            renderer,
         }
     }
 
-    /// Check the `message` and report its errors and warnings.
-    fn check(&self, message: &Message) -> Outcome {
-        let name = &message.name;
-        let message = &message.text;
+    /// Check the `message` and return the outcome with the errors and warnings.
+    fn check<'m>(&self, message: &'m Message) -> Report<'m> {
+        let report = |outcome, parse_error, results| Report {
+            message,
+            outcome,
+            parse_error,
+            results,
+        };
 
-        if self.config.is_ignored(message) {
-            info!("{} is ignored.", name);
-            return Outcome::Ignored;
+        if self.config.is_ignored(&message.text) {
+            info!("{} is ignored.", message.name);
+            return report(Outcome::Ignored, None, vec![]);
         }
 
-        let parsed = match parse_conventional_commit(message, &self.config.parser) {
+        let parsed = match parse_conventional_commit(&message.text, &self.config.parser) {
             Ok(parsed) => parsed,
-            Err(e) => {
-                println!("{} failed to parse:\n", name);
-                let span = parse_error_span(&e);
-                self.print_error(Severity::Error, None, &e.to_string(), span, message);
-                return Outcome::Failed;
-            }
+            Err(e) => return report(Outcome::Failed, Some(e), vec![]),
         };
 
         debug!("{:#?}", parsed);
@@ -223,21 +229,57 @@ impl<'a> Checker<'a> {
         };
 
         let outcome = if has_violations(Severity::Error) {
-            println!("{} failed:\n", name);
             Outcome::Failed
         } else if has_violations(Severity::Warning) {
-            println!("{} passed with warnings:\n", name);
             Outcome::PassedWithWarnings
         } else {
-            info!("{} passed.", name);
+            info!("{} passed.", message.name);
             Outcome::Passed
         };
 
-        for result in &results {
-            if result.errors.is_empty() {
-                debug!("  Rule '{}' passed", result.rule_name);
-            }
+        for result in results.iter().filter(|result| result.errors.is_empty()) {
+            debug!("  Rule '{}' passed", result.rule_name);
+        }
 
+        report(outcome, None, results)
+    }
+}
+
+/// Prints the errors and warnings of the checked commits as human-readable text.
+struct TextReporter {
+    renderer: Renderer,
+}
+
+impl TextReporter {
+    fn new() -> Self {
+        let renderer = if std::io::stdout().is_terminal() {
+            Renderer::styled()
+        } else {
+            Renderer::plain()
+        };
+
+        TextReporter { renderer }
+    }
+
+    /// Print the errors and warnings of a commit, if it has any.
+    fn print_report(&self, report: &Report) {
+        let name = &report.message.name;
+        let message = &report.message.text;
+
+        if let Some(e) = &report.parse_error {
+            println!("{} failed to parse:\n", name);
+            let span = parse_error_span(e);
+            self.print_error(Severity::Error, None, &e.to_string(), span, message);
+            return;
+        }
+
+        match report.outcome {
+            Outcome::Failed => println!("{} failed:\n", name),
+            Outcome::PassedWithWarnings => println!("{} passed with warnings:\n", name),
+            Outcome::Ignored | Outcome::Passed => return,
+        }
+
+        for result in &report.results {
             for e in &result.errors {
                 let span = e.span.clone();
                 self.print_error(
@@ -249,8 +291,6 @@ impl<'a> Checker<'a> {
                 );
             }
         }
-
-        outcome
     }
 
     fn print_error(
