@@ -92,8 +92,9 @@ otherwise CoCoCheck fails with an error.
 `--from` and `--to` accept any Git revision that resolves to a commit, such as a commit ID, a branch
 or tag name, or an expression like `HEAD~3`. Like Git's `FROM..TO` notation, the range contains
 the commits that are reachable from `--to`, but not from `--from`, so `--from` itself is not
-checked. `--from` must be an ancestor of `--to`. If both are the same commit, the range is empty and
-the check passes.
+checked. `--from` does not have to be an ancestor of `--to`, so a branch can be checked against a
+`main` branch that has moved on since the branch was created. If the range is empty, for example
+because both are the same commit, the check passes.
 
 For example, to check the last three commits on the current branch:
 

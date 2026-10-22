@@ -41,9 +41,6 @@ pub enum GitError {
     #[error("the repository does not contain any commits")]
     NoCommits,
 
-    #[error("the 'from' revision '{from}' is not an ancestor of the 'to' revision '{to}'")]
-    NotAnAncestor { from: String, to: String },
-
     #[error("failed to read commits: {}", .0.message())]
     Git(git2::Error),
 }
@@ -56,8 +53,8 @@ impl From<git2::Error> for GitError {
 
 /// Get the commits of the repository at `repo_path` that are reachable from `to`, but not from
 /// `from`, ordered from oldest to newest. Like Git's `from..to` notation, this excludes `from`
-/// itself. If `from` is not set, include all commits up to the root commits. If `to` is not set,
-/// end at `HEAD`.
+/// itself, and `from` does not have to be an ancestor of `to`. If `from` is not set, include all
+/// commits up to the root commits. If `to` is not set, end at `HEAD`.
 pub fn get_commits(
     repo_path: &Path,
     from: Option<&str>,
@@ -76,19 +73,9 @@ pub fn get_commits(
             .peel_to_commit()?
             .id(),
     };
-    let from_oid = match from {
-        Some(revision) => {
-            let from_oid = resolve_revision(&repo, "from", revision)?;
-            if from_oid != to_oid && !repo.graph_descendant_of(to_oid, from_oid)? {
-                return Err(GitError::NotAnAncestor {
-                    from: revision.to_string(),
-                    to: to.unwrap_or("HEAD").to_string(),
-                });
-            }
-            Some(from_oid)
-        }
-        None => None,
-    };
+    let from_oid = from
+        .map(|revision| resolve_revision(&repo, "from", revision))
+        .transpose()?;
 
     let commits = commits_between(&repo, from_oid, to_oid)?;
 
@@ -376,33 +363,35 @@ mod tests {
     }
 
     #[test]
-    fn fails_if_from_is_after_to() {
+    fn returns_no_commits_if_from_is_after_to() {
         let (dir, repo) = init_repo();
         let oids = linear_history(&repo, &["first", "second"]);
 
-        let result = get_commits(
+        let range = get_commits(
             dir.path(),
             Some(&oids[1].to_string()),
             Some(&oids[0].to_string()),
-        );
+        )
+        .unwrap();
 
-        assert!(matches!(result, Err(GitError::NotAnAncestor { .. })));
+        assert_eq!(messages(&range), Vec::<&str>::new());
     }
 
     #[test]
-    fn fails_if_from_is_on_a_different_branch() {
+    fn returns_commits_not_on_from_if_from_is_on_a_different_branch() {
         let (dir, repo) = init_repo();
         let base = commit(&repo, "base", &[]);
-        let branch1 = commit(&repo, "branch 1", &[base]);
-        let branch2 = commit(&repo, "branch 2", &[base]);
+        let main = commit(&repo, "main", &[base]);
+        let feature = commit(&repo, "feature", &[base]);
 
-        let result = get_commits(
+        let range = get_commits(
             dir.path(),
-            Some(&branch1.to_string()),
-            Some(&branch2.to_string()),
-        );
+            Some(&main.to_string()),
+            Some(&feature.to_string()),
+        )
+        .unwrap();
 
-        assert!(matches!(result, Err(GitError::NotAnAncestor { .. })));
+        assert_eq!(messages(&range), vec!["feature"]);
     }
 
     #[test]
