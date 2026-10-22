@@ -82,8 +82,9 @@ CoCoCheck finished checking 3 commits.
 | `--to <TO>`             | Last commit to check. The commit itself is checked.          | `HEAD`      |
 | `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).             |             |
 | `--format <FORMAT>`     | Report as `text` or [`json`](#json-output).                  | `text`      |
-| `--info`                | Log informational messages, such as passed commits.          |             |
-| `--debug`               | Log debug messages, including the parsed commits.            |             |
+| `-v`, `--verbose`       | Log informational messages, such as passed commits. Give it  |             |
+|                         | twice (`-vv`) to also log debug messages, such as the parsed |             |
+|                         | commits.                                                     |             |
 | `-h`, `--help`          | Print help.                                                  |             |
 | `-V`, `--version`       | Print the version.                                           |             |
 
@@ -151,7 +152,7 @@ of a merge commit. To create a single commit without running the hook, use
 ### Output and exit status
 
 The report of failed commits and the summary are written to standard output. Log messages enabled
-with `--info` or `--debug`, and fatal errors, are written to standard error. Log messages start with
+with `-v` or `-vv`, and fatal errors, are written to standard error. Log messages start with
 their level, like `info:` or `debug:`, so that they can be told apart from the report.
 
 Each rule violation is reported with the name of the rule and, where possible, a snippet of the
