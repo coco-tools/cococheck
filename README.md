@@ -223,6 +223,9 @@ rules:
     enabled: true
     severity: error
     tokens: []
+  type_case:
+    enabled: true
+    severity: error
 ```
 
 ### Message structure
@@ -390,6 +393,15 @@ by a blank line, does not count.
 | `enabled`  | Whether the rule is applied.                      | `true`  |
 | `severity` | Whether a violation is an `error` or a `warning`. | `error` |
 | `tokens`   | The tokens of the footers that are required.      | `[]`    |
+
+#### `type_case`
+
+Requires the commit type to be lowercase, so that `Feat: Add a feature` is reported.
+
+| Setting    | Description                                       | Default |
+|------------|---------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                      | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
 
 ## Project layout
 
