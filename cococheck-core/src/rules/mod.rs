@@ -63,6 +63,9 @@ pub use blank_line_before_footer::BlankLineBeforeFooter;
 mod body_line_length;
 pub use body_line_length::BodyLineLength;
 
+mod description_case;
+pub use description_case::{DescriptionCase, DescriptionCaseMode};
+
 mod header_length;
 pub use header_length::HeaderLength;
 
