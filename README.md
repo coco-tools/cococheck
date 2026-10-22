@@ -155,6 +155,10 @@ of a merge commit. To create a single commit without running the hook, use
 The report of failed commits and the summary are written to standard output. Log messages enabled
 with `-v` or `-vv`, and fatal errors, are written to standard error. Log messages start with
 their level, like `info:` or `debug:`, so that they can be told apart from the report.
+The `RUST_LOG` environment variable overrides the log level set with `-v`, for example
+`RUST_LOG=debug`. See the
+[`env_logger` documentation](https://docs.rs/env_logger/latest/env_logger/#enabling-logging) for
+the syntax.
 
 Each rule violation is reported with the name of the rule and, where possible, a snippet of the
 commit message that marks the offending part:

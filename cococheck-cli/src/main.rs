@@ -70,6 +70,7 @@ fn main() -> ExitCode {
 
     env_logger::Builder::new()
         .filter_level(level)
+        .parse_default_env()
         .format(|buf, record| {
             let level = record.level().as_str().to_lowercase();
             writeln!(buf, "{level}: {}", record.args())
