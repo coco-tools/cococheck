@@ -54,3 +54,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.89
       - uses: Swatinem/rust-cache@v2.9.3
       - run: cargo test
+
+  cococheck:
+    name: CoCoCheck
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # Fetch the full history, so that the commits of the pull request can be found.
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.3
+      # Check the commits of the pull request with the CoCoCheck version from the pull request. Use
+      # the head commit instead of the checked out merge commit that GitHub creates.
+      - run: cargo run -p cococheck-cli -- --from "$BASE_SHA" --to "$HEAD_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}

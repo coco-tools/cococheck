@@ -416,8 +416,13 @@ The tests also run on the minimum supported Rust version, 1.89. If a change requ
 version, update `rust-version` in [`Cargo.toml`](Cargo.toml) and the MSRV job in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) together.
 
-Commit messages in this repository follow the Conventional Commits specification, so CoCoCheck
-can check its own history.
+Commit messages in this repository follow the Conventional Commits specification. The CI pipeline
+checks the commits of every pull request with the CoCoCheck version from that pull request. To run
+the same check locally:
+
+```shell
+cargo run -p cococheck-cli -- --from main
+```
 
 ## License
 
