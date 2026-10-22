@@ -82,6 +82,7 @@ CoCoCheck finished checking 3 commits.
 | `--from <FROM>`         | Check only commits after this one. It is not checked itself. | All commits |
 | `--to <TO>`             | Last commit to check. The commit itself is checked.          | `HEAD`      |
 | `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).             |             |
+| `--format <FORMAT>`     | Report as `text` or [`json`](#json-output).                  | `text`      |
 | `--info`                | Log informational messages, such as passed commits.          |             |
 | `--debug`               | Log debug messages, including the parsed commits.            |             |
 | `-h`, `--help`          | Print help.                                                  |             |
@@ -177,6 +178,55 @@ error: invalid header: the scope must not be empty
 ```
 
 When standard output is a terminal, the report is colored.
+
+### JSON output
+
+To process the results in other tools, for example in a CI integration, pass `--format json`.
+CoCoCheck then writes a single JSON document to standard output instead of the text report:
+
+```json
+{
+  "commits": [
+    {
+      "id": "2819a1a133fa4e1fcefb08f90c1bb2bb8f675c93",
+      "header": "fix(api): Handle errors.",
+      "outcome": "failed",
+      "parse_error": null,
+      "rules": [
+        {
+          "rule": "NoDescriptionTerminalPunctuation",
+          "severity": "error",
+          "errors": [
+            {
+              "message": "Description should not end with terminal punctuation (., !, ?).",
+              "span": { "start": 23, "end": 24 }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": { "checked": 1, "ignored": 0, "passed_with_warnings": 0, "failed": 1 }
+}
+```
+
+The example shows only one rule; the report lists every enabled rule.
+
+| Field                   | Description                                                                                                         |
+|-------------------------|---------------------------------------------------------------------------------------------------------------------|
+| `commits`               | The checked commits, ordered from oldest to newest, including the ignored ones.                                     |
+| `commits[].id`          | The commit ID, or `null` for a message checked with `--message-file`.                                               |
+| `commits[].header`      | The first line of the commit message.                                                                               |
+| `commits[].outcome`     | `passed`, `passed_with_warnings`, `failed`, or `ignored`.                                                           |
+| `commits[].parse_error` | Why the message could not be parsed, with a `message` and a `span`, or `null`. No rules are applied if it is set.   |
+| `commits[].rules`       | The results of all enabled rules, or an empty list if the commit is ignored or could not be parsed.                 |
+| `rules[].rule`          | The name of the rule.                                                                                               |
+| `rules[].severity`      | The configured severity of the rule, `error` or `warning`.                                                          |
+| `rules[].errors`        | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.               |
+| `span`                  | The byte range `start..end` in the full commit message that a violation refers to, or `null` if it has no location. |
+| `summary`               | The number of `checked` and `ignored` commits, and of the commits that `passed_with_warnings` or `failed`.          |
+
+The exit status is the same as for the text report.
 
 CoCoCheck exits with status `0` if all commits pass, and with status `1` if any commit fails or an
 error occurs, for example because the repository or a revision cannot be found. Violations of rules
