@@ -71,3 +71,6 @@ pub use no_description_terminal_punctuation::NoDescriptionTerminalPunctuation;
 
 mod required_footers;
 pub use required_footers::RequiredFooters;
+
+mod type_case;
+pub use type_case::TypeCase;
