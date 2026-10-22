@@ -28,6 +28,7 @@ impl RuleSet {
         rule_set.add(&rules.header_length);
         rule_set.add(&rules.no_description_terminal_punctuation);
         rule_set.add(&rules.required_footers);
+        rule_set.add(&rules.scope_case);
         rule_set.add(&rules.scope_presence);
         rule_set.add(&rules.type_case);
         rule_set
@@ -79,6 +80,7 @@ mod tests {
                 "DescriptionCase",
                 "NoDescriptionTerminalPunctuation",
                 "RequiredFooters",
+                "ScopeCase",
                 "ScopePresence",
                 "TypeCase"
             ]
@@ -119,6 +121,7 @@ mod tests {
                     1
                 ),
                 ("RequiredFooters".to_string(), Severity::Error, 0),
+                ("ScopeCase".to_string(), Severity::Error, 0),
                 ("ScopePresence".to_string(), Severity::Error, 0),
                 ("TypeCase".to_string(), Severity::Error, 0),
             ]

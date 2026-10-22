@@ -1,8 +1,8 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
     AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLineLength, DescriptionCase,
-    HeaderLength, NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, ScopePresence,
-    TypeCase,
+    HeaderLength, NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, ScopeCase,
+    ScopePresence, TypeCase,
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
@@ -129,6 +129,9 @@ pub struct RulesConfig {
     pub required_footers: RuleConfig<RequiredFooters>,
 
     #[serde(default, deserialize_with = "null_as_default")]
+    pub scope_case: RuleConfig<ScopeCase>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
     pub scope_presence: RuleConfig<ScopePresence>,
 
     #[serde(default, deserialize_with = "null_as_default")]
@@ -200,7 +203,7 @@ pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
 mod tests {
     use super::*;
     use crate::parser::FooterDetection;
-    use crate::rules::{DescriptionCaseMode, Presence, Severity};
+    use crate::rules::{DescriptionCaseMode, Presence, ScopeCaseMode, Severity};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -217,6 +220,7 @@ mod tests {
             RuleConfig::default()
         );
         assert_eq!(config.rules.required_footers, RuleConfig::default());
+        assert_eq!(config.rules.scope_case, RuleConfig::default());
         assert_eq!(config.rules.scope_presence, RuleConfig::default());
         assert_eq!(config.rules.type_case, RuleConfig::default());
     }
@@ -370,6 +374,7 @@ mod tests {
             RuleConfig::default()
         );
         assert_eq!(config.rules.required_footers, RuleConfig::default());
+        assert_eq!(config.rules.scope_case, RuleConfig::default());
         assert_eq!(config.rules.scope_presence, RuleConfig::default());
         assert_eq!(config.rules.type_case, RuleConfig::default());
     }
@@ -553,6 +558,22 @@ mod tests {
             case: title
         "#;
         assert!(matches!(parse_config(yaml), Err(ConfigError::Parse { .. })));
+    }
+
+    #[test]
+    fn read_scope_case() {
+        let yaml = r#"
+        rules:
+          scope_case:
+            case: any
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.scope_case.rule,
+            ScopeCase {
+                case: ScopeCaseMode::Any
+            }
+        );
     }
 
     #[test]
