@@ -333,6 +333,10 @@ This is the body.
 Refs: #123
 ```
 
+A paragraph that starts with a footer line is not reported, because it is a footer paragraph that
+is followed by another one, which is parsed as body with the default `footer_detection` setting.
+Use the `trailing_paragraphs` [footer detection](#parser) to parse it as footers.
+
 | Setting    | Description                                       | Default |
 |------------|---------------------------------------------------|---------|
 | `enabled`  | Whether the rule is applied.                      | `true`  |
