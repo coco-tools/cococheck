@@ -230,6 +230,10 @@ rules:
     enabled: true
     severity: error
     tokens: []
+  scope_case:
+    enabled: true
+    severity: error
+    case: lower
   scope_presence:
     enabled: true
     severity: error
@@ -448,6 +452,22 @@ by a blank line, does not count.
 | `enabled`  | Whether the rule is applied.                      | `true`  |
 | `severity` | Whether a violation is an `error` or a `warning`. | `error` |
 | `tokens`   | The tokens of the footers that are required.      | `[]`    |
+
+#### `scope_case`
+
+Requires the scope to be lowercase, so that `feat(Core): Add a feature` is reported. A commit
+without a scope passes.
+
+`case` accepts the following values:
+
+- `lower`: The scope must not contain uppercase letters.
+- `any`: The scope can contain letters of any case.
+
+| Setting    | Description                                       | Default |
+|------------|---------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                      | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
+| `case`     | The required case of the scope.                   | `lower` |
 
 #### `scope_presence`
 
