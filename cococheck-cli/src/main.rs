@@ -1,11 +1,12 @@
 use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
 use anyhow::Context;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use cococheck_core::config::{Config, ConfigError, load_config};
 use cococheck_core::git::{get_commits, get_commits_for_revisions, message_cleanup};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
 use cococheck_core::rules::{RuleResult, RuleSet, Severity};
 use log::{LevelFilter, debug, info};
+use serde::Serialize;
 use std::io::{IsTerminal, Read, Write};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -39,6 +40,10 @@ struct Cli {
     #[arg(long, value_name = "FILE", conflicts_with_all = ["revisions", "from", "to"])]
     message_file: Option<PathBuf>,
 
+    /// The format of the report on standard output
+    #[arg(long, value_enum, default_value_t = Format::Text)]
+    format: Format,
+
     /// Enable info logging
     #[arg(long)]
     info: bool,
@@ -46,6 +51,16 @@ struct Cli {
     /// Enable debug logging
     #[arg(long)]
     debug: bool,
+}
+
+/// The format of the report.
+#[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
+enum Format {
+    /// Human-readable text with annotated snippets of the commit messages.
+    Text,
+
+    /// A single JSON document with the results of all checked commits.
+    Json,
 }
 
 fn main() -> ExitCode {
@@ -85,22 +100,47 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     };
 
     let checker = Checker::new(&config);
-    let reporter = TextReporter::new();
-    let mut outcomes = Vec::new();
+    let reports = messages.iter().map(|message| checker.check(message));
 
-    for message in &messages {
-        let report = checker.check(message);
-        reporter.print_report(&report);
-        outcomes.push(report.outcome);
-    }
-
-    print_summary(&outcomes);
+    let outcomes = match args.format {
+        Format::Text => print_text_report(reports),
+        Format::Json => print_json_report(reports)?,
+    };
 
     Ok(!outcomes.contains(&Outcome::Failed))
 }
 
+/// Print the errors and warnings of the `reports` as text, as soon as each commit is checked, and a
+/// summary at the end. Return the outcomes of the commits.
+fn print_text_report<'a>(reports: impl Iterator<Item = Report<'a>>) -> Vec<Outcome> {
+    let reporter = TextReporter::new();
+    let outcomes: Vec<Outcome> = reports
+        .map(|report| {
+            reporter.print_report(&report);
+            report.outcome
+        })
+        .collect();
+
+    print_summary(&outcomes);
+    outcomes
+}
+
+/// Print the `reports` as a single JSON document. Return the outcomes of the commits.
+fn print_json_report<'a>(
+    reports: impl Iterator<Item = Report<'a>>,
+) -> anyhow::Result<Vec<Outcome>> {
+    let reports: Vec<Report> = reports.collect();
+    let json = serde_json::to_string_pretty(&JsonReport::new(&reports))
+        .context("failed to serialize the report as JSON")?;
+    println!("{json}");
+
+    Ok(reports.iter().map(|report| report.outcome).collect())
+}
+
 /// A commit message to check.
 struct Message {
+    /// The ID of the commit, or `None` if the message was not read from a commit.
+    id: Option<String>,
     /// The name that refers to the message in the report.
     name: String,
     text: String,
@@ -130,6 +170,7 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
         .into_iter()
         .map(|commit| Message {
             name: format!("Commit {}", commit.id),
+            id: Some(commit.id),
             text: commit.message,
         })
         .collect();
@@ -154,13 +195,15 @@ fn read_message_file(repo_path: &Path, path: &Path) -> anyhow::Result<Message> {
     debug!("Cleaning up the commit message with {:?}.", cleanup);
 
     Ok(Message {
+        id: None,
         name: "Commit message".to_string(),
         text: cleanup.clean(&String::from_utf8_lossy(&bytes)),
     })
 }
 
 /// The outcome of checking a single commit.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 enum Outcome {
     /// The commit was not checked, because its message matches an ignore pattern.
     Ignored,
@@ -306,14 +349,122 @@ impl TextReporter {
     }
 }
 
+/// The report of all checked commits in the JSON format.
+#[derive(Serialize)]
+struct JsonReport<'a> {
+    commits: Vec<JsonCommit<'a>>,
+    summary: Summary,
+}
+
+#[derive(Serialize)]
+struct JsonCommit<'a> {
+    id: Option<&'a str>,
+    header: &'a str,
+    outcome: Outcome,
+    parse_error: Option<JsonError>,
+    rules: Vec<JsonRule<'a>>,
+}
+
+#[derive(Serialize)]
+struct JsonRule<'a> {
+    rule: &'a str,
+    severity: Severity,
+    errors: Vec<JsonError>,
+}
+
+#[derive(Serialize)]
+struct JsonError {
+    message: String,
+    /// The byte range in the full commit message that the error refers to.
+    span: Option<JsonSpan>,
+}
+
+#[derive(Serialize)]
+struct JsonSpan {
+    start: usize,
+    end: usize,
+}
+
+impl From<Range<usize>> for JsonSpan {
+    fn from(range: Range<usize>) -> Self {
+        JsonSpan {
+            start: range.start,
+            end: range.end,
+        }
+    }
+}
+
+impl<'a> JsonReport<'a> {
+    fn new(reports: &'a [Report]) -> Self {
+        let commits = reports
+            .iter()
+            .map(|report| JsonCommit {
+                id: report.message.id.as_deref(),
+                header: report.message.text.lines().next().unwrap_or(""),
+                outcome: report.outcome,
+                parse_error: report.parse_error.as_ref().map(|e| JsonError {
+                    message: e.to_string(),
+                    span: parse_error_span(e).map(JsonSpan::from),
+                }),
+                rules: report
+                    .results
+                    .iter()
+                    .map(|result| JsonRule {
+                        rule: &result.rule_name,
+                        severity: result.severity,
+                        errors: result
+                            .errors
+                            .iter()
+                            .map(|e| JsonError {
+                                message: e.message.clone(),
+                                span: e.span.clone().map(JsonSpan::from),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            })
+            .collect();
+
+        let outcomes: Vec<Outcome> = reports.iter().map(|report| report.outcome).collect();
+        JsonReport {
+            commits,
+            summary: Summary::new(&outcomes),
+        }
+    }
+}
+
+/// How many commits were checked, ignored, passed with warnings, and failed.
+#[derive(Debug, PartialEq, Serialize)]
+struct Summary {
+    checked: usize,
+    ignored: usize,
+    passed_with_warnings: usize,
+    failed: usize,
+}
+
+impl Summary {
+    fn new(outcomes: &[Outcome]) -> Self {
+        let count = |outcome| outcomes.iter().filter(|&&o| o == outcome).count();
+        let ignored = count(Outcome::Ignored);
+
+        Summary {
+            checked: outcomes.len() - ignored,
+            ignored,
+            passed_with_warnings: count(Outcome::PassedWithWarnings),
+            failed: count(Outcome::Failed),
+        }
+    }
+}
+
 /// Print how many commits were checked, and how many of them failed or had warnings, and how many
 /// commits were ignored.
 fn print_summary(outcomes: &[Outcome]) {
-    let count = |outcome| outcomes.iter().filter(|&&o| o == outcome).count();
-    let ignored_commits = count(Outcome::Ignored);
-    let checked_commits = outcomes.len() - ignored_commits;
-    let failed_commits = count(Outcome::Failed);
-    let warned_commits = count(Outcome::PassedWithWarnings);
+    let Summary {
+        checked: checked_commits,
+        ignored: ignored_commits,
+        passed_with_warnings: warned_commits,
+        failed: failed_commits,
+    } = Summary::new(outcomes);
 
     println!(
         "CoCoCheck finished checking {} commit{}.",
@@ -440,6 +591,143 @@ mod tests {
     /// The CLI crate directory, which does not contain a `cococheck.yml`.
     fn dir_without_config() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    fn message(id: Option<&str>, text: &str) -> Message {
+        Message {
+            id: id.map(str::to_string),
+            name: "Commit".to_string(),
+            text: text.to_string(),
+        }
+    }
+
+    #[test]
+    fn format_defaults_to_text() {
+        let args = Cli::try_parse_from(["cococheck"]).unwrap();
+        assert_eq!(args.format, Format::Text);
+
+        let args = Cli::try_parse_from(["cococheck", "--format", "json"]).unwrap();
+        assert_eq!(args.format, Format::Json);
+    }
+
+    #[test]
+    fn json_report_contains_the_results_of_all_commits() {
+        let config = cococheck_core::config::parse_config(
+            "rules: { header_length: { severity: warning, max_length: 30 } }",
+        )
+        .unwrap();
+        let messages = [
+            message(None, "feat: Add a feature\n"),
+            message(Some("b2"), "feat: Add a feature that is long\n"),
+            message(Some("c3"), "feat: Add a feature that is too long."),
+            message(Some("d4"), "Update stuff"),
+            message(Some("e5"), "Merge branch 'feature'"),
+        ];
+        let checker = Checker::new(&config);
+        let reports: Vec<Report> = messages.iter().map(|m| checker.check(m)).collect();
+
+        let mut json = serde_json::to_value(JsonReport::new(&reports)).unwrap();
+
+        // Every enabled rule is reported, but only compare the results of the rules that the
+        // messages violate, so that the test does not depend on the set of rules.
+        let rule_count = checker.rule_set.rules.len();
+        assert_eq!(
+            json["commits"][0]["rules"].as_array().unwrap().len(),
+            rule_count
+        );
+        for commit in json["commits"].as_array_mut().unwrap() {
+            commit["rules"].as_array_mut().unwrap().retain(|rule| {
+                ["HeaderLength", "NoDescriptionTerminalPunctuation"]
+                    .contains(&rule["rule"].as_str().unwrap())
+            });
+        }
+
+        let header_length_error = |actual: usize| {
+            serde_json::json!({
+                "message": format!(
+                    "Header exceeds maximum length of 30 characters (actual: {actual})."
+                ),
+                "span": { "start": 0, "end": actual }
+            })
+        };
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "commits": [
+                    {
+                        "id": null,
+                        "header": "feat: Add a feature",
+                        "outcome": "passed",
+                        "parse_error": null,
+                        "rules": [
+                            { "rule": "HeaderLength", "severity": "warning", "errors": [] },
+                            {
+                                "rule": "NoDescriptionTerminalPunctuation",
+                                "severity": "error",
+                                "errors": []
+                            }
+                        ]
+                    },
+                    {
+                        "id": "b2",
+                        "header": "feat: Add a feature that is long",
+                        "outcome": "passed_with_warnings",
+                        "parse_error": null,
+                        "rules": [
+                            {
+                                "rule": "HeaderLength",
+                                "severity": "warning",
+                                "errors": [header_length_error(32)]
+                            },
+                            {
+                                "rule": "NoDescriptionTerminalPunctuation",
+                                "severity": "error",
+                                "errors": []
+                            }
+                        ]
+                    },
+                    {
+                        "id": "c3",
+                        "header": "feat: Add a feature that is too long.",
+                        "outcome": "failed",
+                        "parse_error": null,
+                        "rules": [
+                            {
+                                "rule": "HeaderLength",
+                                "severity": "warning",
+                                "errors": [header_length_error(37)]
+                            },
+                            {
+                                "rule": "NoDescriptionTerminalPunctuation",
+                                "severity": "error",
+                                "errors": [{
+                                    "message": "Description should not end with terminal punctuation (., !, ?).",
+                                    "span": { "start": 36, "end": 37 }
+                                }]
+                            }
+                        ]
+                    },
+                    {
+                        "id": "d4",
+                        "header": "Update stuff",
+                        "outcome": "failed",
+                        "parse_error": {
+                            "message": "invalid header: expected ': ' after the type",
+                            "span": { "start": 6, "end": 7 }
+                        },
+                        "rules": []
+                    },
+                    {
+                        "id": "e5",
+                        "header": "Merge branch 'feature'",
+                        "outcome": "ignored",
+                        "parse_error": null,
+                        "rules": []
+                    }
+                ],
+                "summary": { "checked": 4, "ignored": 1, "passed_with_warnings": 1, "failed": 2 }
+            })
+        );
     }
 
     #[test]
