@@ -41,6 +41,17 @@ fn default_enabled() -> bool {
     true
 }
 
+/// Return the byte range of the scope in the full commit message, without the parentheses, or
+/// `None` if the commit has no scope. The header has the form `type(scope)`, and it is the first
+/// line of the message.
+fn scope_span(commit: &ConventionalCommit) -> Option<std::ops::Range<usize>> {
+    let start = commit.commit_type.len() + 1;
+    commit
+        .scope
+        .as_ref()
+        .map(|scope| start..start + scope.len())
+}
+
 impl<R: Default> Default for RuleConfig<R> {
     fn default() -> Self {
         RuleConfig {
@@ -53,6 +64,9 @@ impl<R: Default> Default for RuleConfig<R> {
 
 mod rule_set;
 pub use rule_set::{RuleResult, RuleSet};
+
+mod allowed_scopes;
+pub use allowed_scopes::AllowedScopes;
 
 mod allowed_types;
 pub use allowed_types::AllowedTypes;

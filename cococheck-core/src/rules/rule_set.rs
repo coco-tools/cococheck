@@ -20,6 +20,7 @@ impl RuleSet {
     pub fn new(config: &Config) -> Self {
         let rules = &config.rules;
         let mut rule_set = RuleSet { rules: vec![] };
+        rule_set.add(&rules.allowed_scopes);
         rule_set.add(&rules.allowed_types);
         rule_set.add(&rules.blank_line_before_footer);
         rule_set.add(&rules.body_line_length);
@@ -71,6 +72,7 @@ mod tests {
         assert_eq!(
             names,
             vec![
+                "AllowedScopes",
                 "AllowedTypes",
                 "BodyLineLength",
                 "DescriptionCase",
@@ -103,6 +105,7 @@ mod tests {
         assert_eq!(
             severities,
             vec![
+                ("AllowedScopes".to_string(), Severity::Error, 0),
                 ("AllowedTypes".to_string(), Severity::Error, 0),
                 ("BlankLineBeforeFooter".to_string(), Severity::Error, 0),
                 ("BodyLineLength".to_string(), Severity::Error, 0),

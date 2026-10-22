@@ -1,7 +1,7 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
-    AllowedTypes, BlankLineBeforeFooter, BodyLineLength, DescriptionCase, HeaderLength,
-    NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, TypeCase,
+    AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLineLength, DescriptionCase,
+    HeaderLength, NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, TypeCase,
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer};
@@ -104,6 +104,9 @@ where
 #[serde(deny_unknown_fields)]
 pub struct RulesConfig {
     #[serde(default, deserialize_with = "null_as_default")]
+    pub allowed_scopes: RuleConfig<AllowedScopes>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
     pub allowed_types: RuleConfig<AllowedTypes>,
 
     #[serde(default, deserialize_with = "null_as_default")]
@@ -199,6 +202,7 @@ mod tests {
     #[test]
     fn read_default_config_for_empty_config() {
         let config = parse_config("").unwrap();
+        assert_eq!(config.rules.allowed_scopes, RuleConfig::default());
         assert_eq!(config.rules.allowed_types, RuleConfig::default());
         assert_eq!(config.rules.blank_line_before_footer, RuleConfig::default());
         assert_eq!(config.rules.body_line_length, RuleConfig::default());
@@ -350,6 +354,7 @@ mod tests {
         rules: {}
         "#;
         let config = parse_config(yaml).unwrap();
+        assert_eq!(config.rules.allowed_scopes, RuleConfig::default());
         assert_eq!(config.rules.allowed_types, RuleConfig::default());
         assert_eq!(config.rules.blank_line_before_footer, RuleConfig::default());
         assert_eq!(config.rules.body_line_length, RuleConfig::default());
@@ -498,6 +503,22 @@ mod tests {
                 rule: RequiredFooters {
                     tokens: vec!["Signed-off-by".to_string()]
                 },
+            }
+        );
+    }
+
+    #[test]
+    fn read_allowed_scopes() {
+        let yaml = r#"
+        rules:
+          allowed_scopes:
+            scopes: [cli, core]
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.allowed_scopes.rule,
+            AllowedScopes {
+                scopes: vec!["cli".to_string(), "core".to_string()]
             }
         );
     }
