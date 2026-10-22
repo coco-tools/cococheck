@@ -211,6 +211,10 @@ rules:
     severity: error
     max_length: 72
     ignore_urls: true
+  description_case:
+    enabled: true
+    severity: error
+    case: any
   header_length:
     enabled: true
     severity: error
@@ -364,6 +368,24 @@ Long URLs cannot be wrapped, so by default lines that contain a URL starting wit
 | `severity`    | Whether a violation is an `error` or a `warning`. | `error` |
 | `max_length`  | The maximum number of characters per line.        | `72`    |
 | `ignore_urls` | Whether lines that contain a URL are skipped.     | `true`  |
+
+#### `description_case`
+
+Requires the description in the header to start with a lowercase or an uppercase letter. Only the
+first character is checked, and a description that does not start with a letter, like
+`` `--from` is exclusive ``, always passes. By default, any case is allowed.
+
+`case` accepts the following values:
+
+- `lower`: The description must start with a lowercase letter, like `feat: add a feature`.
+- `sentence`: The description must start with an uppercase letter, like `feat: Add a feature`.
+- `any`: The description can start with any letter.
+
+| Setting    | Description                                       | Default |
+|------------|---------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                      | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
+| `case`     | The required case of the first letter.            | `any`   |
 
 #### `header_length`
 

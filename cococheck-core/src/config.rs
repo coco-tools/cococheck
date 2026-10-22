@@ -1,6 +1,6 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
-    AllowedTypes, BlankLineBeforeFooter, BodyLineLength, HeaderLength,
+    AllowedTypes, BlankLineBeforeFooter, BodyLineLength, DescriptionCase, HeaderLength,
     NoDescriptionTerminalPunctuation, RequiredFooters, RuleConfig, TypeCase,
 };
 use regex::Regex;
@@ -113,6 +113,9 @@ pub struct RulesConfig {
     pub body_line_length: RuleConfig<BodyLineLength>,
 
     #[serde(default, deserialize_with = "null_as_default")]
+    pub description_case: RuleConfig<DescriptionCase>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
     pub header_length: RuleConfig<HeaderLength>,
 
     #[serde(default, deserialize_with = "null_as_default")]
@@ -190,7 +193,7 @@ pub fn load_config(path: &Path) -> Result<Config, ConfigError> {
 mod tests {
     use super::*;
     use crate::parser::FooterDetection;
-    use crate::rules::Severity;
+    use crate::rules::{DescriptionCaseMode, Severity};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -199,6 +202,7 @@ mod tests {
         assert_eq!(config.rules.allowed_types, RuleConfig::default());
         assert_eq!(config.rules.blank_line_before_footer, RuleConfig::default());
         assert_eq!(config.rules.body_line_length, RuleConfig::default());
+        assert_eq!(config.rules.description_case, RuleConfig::default());
         assert_eq!(config.rules.header_length, RuleConfig::default());
         assert_eq!(
             config.rules.no_description_terminal_punctuation,
@@ -349,6 +353,7 @@ mod tests {
         assert_eq!(config.rules.allowed_types, RuleConfig::default());
         assert_eq!(config.rules.blank_line_before_footer, RuleConfig::default());
         assert_eq!(config.rules.body_line_length, RuleConfig::default());
+        assert_eq!(config.rules.description_case, RuleConfig::default());
         assert_eq!(config.rules.header_length, RuleConfig::default());
         assert_eq!(
             config.rules.no_description_terminal_punctuation,
@@ -495,6 +500,32 @@ mod tests {
                 },
             }
         );
+    }
+
+    #[test]
+    fn read_description_case() {
+        let yaml = r#"
+        rules:
+          description_case:
+            case: sentence
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.description_case.rule,
+            DescriptionCase {
+                case: DescriptionCaseMode::Sentence
+            }
+        );
+    }
+
+    #[test]
+    fn fails_for_unknown_description_case() {
+        let yaml = r#"
+        rules:
+          description_case:
+            case: title
+        "#;
+        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse { .. })));
     }
 
     #[test]
