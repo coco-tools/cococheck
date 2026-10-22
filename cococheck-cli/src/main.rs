@@ -76,7 +76,10 @@ fn main() -> ExitCode {
 
     env_logger::Builder::new()
         .filter_level(level)
-        .format(|buf, record| writeln!(buf, "{}", record.args()))
+        .format(|buf, record| {
+            let level = record.level().as_str().to_lowercase();
+            writeln!(buf, "{level}: {}", record.args())
+        })
         .init();
 
     match run(&args) {

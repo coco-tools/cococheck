@@ -151,7 +151,8 @@ of a merge commit. To create a single commit without running the hook, use
 ### Output and exit status
 
 The report of failed commits and the summary are written to standard output. Log messages enabled
-with `--info` or `--debug`, and fatal errors, are written to standard error.
+with `--info` or `--debug`, and fatal errors, are written to standard error. Log messages start with
+their level, like `info:` or `debug:`, so that they can be told apart from the report.
 
 Each rule violation is reported with the name of the rule and, where possible, a snippet of the
 commit message that marks the offending part:
