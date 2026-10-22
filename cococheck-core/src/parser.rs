@@ -343,7 +343,13 @@ pub fn parse_footer_line(line: &str) -> Option<(String, String)> {
     let footer_regex =
         regex!(r"^(?P<token>BREAKING CHANGE|\[[^]]+]|[\p{L}\p{N}-]+)(?P<sep>: | #)(?P<value>.+)$");
 
-    footer_regex.captures(line).map(|caps| {
+    // A bracketed token like `[1]` is a link reference, which is followed by `: `. With ` #`, it is
+    // more likely an item of a numbered list, like `[1] #123`.
+    let caps = footer_regex
+        .captures(line)
+        .filter(|caps| !(caps["token"].starts_with('[') && &caps["sep"] == " #"));
+
+    caps.map(|caps| {
         let token = caps["token"].to_string();
         let sep = &caps["sep"];
         let value = &caps["value"];
@@ -967,5 +973,28 @@ mod tests {
             commit.footer,
             vec![footer("Refs", "#1"), footer("Signed-off-by", "John Doe")]
         );
+    }
+
+    #[test]
+    fn parses_bracketed_footer_tokens_only_with_colon() {
+        assert_eq!(
+            parse_footer_line("[1]: https://example.org"),
+            Some(("[1]".to_string(), "https://example.org".to_string()))
+        );
+        assert_eq!(parse_footer_line("[5] #5560."), None);
+        assert_eq!(
+            parse_footer_line("Fixes #5560."),
+            Some(("Fixes".to_string(), "#5560.".to_string()))
+        );
+    }
+
+    #[test]
+    fn parses_numbered_list_with_issue_references_as_body() {
+        let message = "feat: add new feature\n\nBody.\n\n[1] #123\n[2] #456";
+
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+
+        assert_eq!(commit.body.as_deref(), Some("Body.\n\n[1] #123\n[2] #456"));
+        assert_eq!(commit.footer, vec![]);
     }
 }
