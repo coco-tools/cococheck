@@ -32,15 +32,21 @@ impl Rule for BlankLineBeforeFooter {
             return vec![];
         }
 
-        let in_code_block = code_block_lines(lines);
-        let first_footer_line = last_paragraph
-            .iter()
-            .zip(&in_code_block[last_paragraph_start..])
-            .skip(1)
-            .find(|(line, in_code_block)| {
-                !**in_code_block && parse_footer_line(&line.text).is_some()
+        // Only report a footer line if the previous line ends a sentence or a code block, or is a
+        // footer itself. Otherwise, the line is more likely part of a wrapped sentence that happens
+        // to contain a colon, like "multiple planned\nimplementations: A functional one".
+        let in_code_block = &code_block_lines(lines)[last_paragraph_start..];
+        let is_footer =
+            |i: usize| !in_code_block[i] && parse_footer_line(&last_paragraph[i].text).is_some();
+        let first_footer_line = (1..last_paragraph.len())
+            .find(|&i| {
+                let previous = i - 1;
+                is_footer(i)
+                    && (is_footer(previous)
+                        || in_code_block[previous]
+                        || ends_sentence(&last_paragraph[previous].text))
             })
-            .map(|(line, _)| line);
+            .map(|i| &last_paragraph[i]);
 
         match first_footer_line {
             Some(line) => vec![RuleError {
@@ -53,6 +59,13 @@ impl Rule for BlankLineBeforeFooter {
             None => vec![],
         }
     }
+}
+
+/// Return whether the `line` ends with sentence punctuation, which may be followed by closing
+/// brackets or quotes. A colon does not end a sentence, because it introduces what follows.
+fn ends_sentence(line: &str) -> bool {
+    line.trim_end_matches([')', ']', '"', '\'', '`'])
+        .ends_with(['.', '!', '?'])
 }
 
 /// Return for each of the `lines` whether it is part of a fenced code block, including the fences.
@@ -150,6 +163,49 @@ mod tests {
         let result = check(message);
         assert_eq!(result.len(), 1);
         assert_eq!(&message[result[0].span.clone().unwrap()], "Refs: #1");
+    }
+
+    #[test]
+    fn succeeds_for_footer_like_lines_in_wrapped_sentences() {
+        for body in [
+            "An interface is used here, as there are multiple planned\n\
+            implementations: A functional one based on a file-cache and one that\n\
+            basically disables caching.",
+            "This removes an annoying UI build warning \"Unexpected token in attribute\n\
+            selector: Colon\".",
+            "It now returns:\ndata: {}",
+        ] {
+            let message = format!("fix: Fix a bug\n\n{body}");
+            assert!(check(&message).is_empty(), "{message}");
+        }
+    }
+
+    #[test]
+    fn succeeds_for_numbered_list_of_issue_references() {
+        let message = "fix: Fix a bug\n\nThe following commands were used:\n\n\
+            [1] `go list -deps ./...`\n\
+            [2] #5541.\n\
+            [5] #5560.";
+        assert!(check(message).is_empty());
+    }
+
+    #[test]
+    fn fails_for_footer_after_sentence() {
+        for (body, footer) in [
+            ("This is the body.\nRefs: #123", "Refs: #123"),
+            (
+                "This is the body.\nSigned-off-by: Jane Doe <jane@example.com>",
+                "Signed-off-by: Jane Doe <jane@example.com>",
+            ),
+            ("Is this the body?\nRefs: #123", "Refs: #123"),
+            ("This is the body (really.)\nRefs: #123", "Refs: #123"),
+            ("This is the body\nNote: prose\nRefs: #123", "Refs: #123"),
+        ] {
+            let message = format!("fix: Fix a bug\n\n{body}");
+            let result = check(&message);
+            assert_eq!(result.len(), 1, "{message}");
+            assert_eq!(&message[result[0].span.clone().unwrap()], footer);
+        }
     }
 
     #[test]
