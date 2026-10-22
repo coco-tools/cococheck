@@ -285,7 +285,9 @@ The `parser` section controls how CoCoCheck splits a message into header, body, 
   contains footers. Use this if footers in your repository are sometimes separated by blank lines.
 
 A footer line consists of a token, followed by `: ` or ` #`, and a value, for example
-`Refs: #123`, `Fixes #42`, or `BREAKING CHANGE: The API has changed`.
+`Refs: #123`, `Fixes #42`, or `BREAKING CHANGE: The API has changed`. A token in brackets, like a
+link reference `[1]: https://example.org`, must be followed by `: `, so that a numbered list like
+`[1] #123` is not taken for footers.
 
 ### Rules
 
