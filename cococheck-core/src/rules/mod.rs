@@ -1,5 +1,5 @@
 use crate::parser::ConventionalCommit;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq)]
 pub struct RuleError {
@@ -14,7 +14,7 @@ pub trait Rule {
 }
 
 /// How a violation of a rule is treated.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     /// The violation is reported, but the commit passes the checks.
