@@ -2,7 +2,7 @@ use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
 use anyhow::Context;
 use clap::Parser;
 use cococheck_core::config::{Config, ConfigError, load_config};
-use cococheck_core::git::{get_commits, message_cleanup};
+use cococheck_core::git::{get_commits, get_commits_for_revisions, message_cleanup};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
 use cococheck_core::rules::{RuleSet, Severity};
 use log::{LevelFilter, debug, info};
@@ -22,6 +22,11 @@ struct Cli {
     #[arg(short, long)]
     config: Option<PathBuf>,
 
+    /// Check only this commit, or the commits in a range like A..B, as in `git show` (default: all
+    /// commits)
+    #[arg(value_name = "REVISION_RANGE", conflicts_with_all = ["from", "to"])]
+    revisions: Option<String>,
+
     /// Check only the commits after this one (exclusive, like Git's FROM..TO, default: all commits)
     #[arg(long)]
     from: Option<String>,
@@ -31,7 +36,7 @@ struct Cli {
     to: Option<String>,
 
     /// Check only the commit message in this file ("-" for stdin), e.g. in a commit-msg hook
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["from", "to"])]
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["revisions", "from", "to"])]
     message_file: Option<PathBuf>,
 
     /// Enable info logging
@@ -97,14 +102,20 @@ struct Message {
     text: String,
 }
 
-/// Collect the messages of the commits in the range selected by `args`, ordered from oldest to
-/// newest.
+/// Collect the messages of the commits selected by `args`, ordered from oldest to newest.
 fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
-    let range = get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?;
+    let range = match &args.revisions {
+        Some(revisions) => get_commits_for_revisions(&args.input, revisions)?,
+        None => get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?,
+    };
 
     let to = args.to.as_deref().unwrap_or("HEAD");
-    match (&args.from, &range.from) {
-        (Some(from), Some(from_id)) => {
+    match (&args.revisions, &args.from, &range.from) {
+        (Some(revisions), _, Some(from_id)) => {
+            info!("Using commit range {revisions} ({from_id}..{})", range.to)
+        }
+        (Some(revision), _, None) => info!("Using commit {revision} ({})", range.to),
+        (None, Some(from), Some(from_id)) => {
             info!("Using commit range {from}..{to} ({from_id}..{})", range.to)
         }
         _ => info!("Using all commits up to {to} ({})", range.to),
@@ -389,6 +400,19 @@ mod tests {
     /// The CLI crate directory, which does not contain a `cococheck.yml`.
     fn dir_without_config() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    #[test]
+    fn revisions_conflict_with_from_to_and_message_file() {
+        for args in [
+            &["cococheck", "HEAD", "--from", "HEAD~1"][..],
+            &["cococheck", "HEAD", "--to", "HEAD"],
+            &["cococheck", "HEAD", "--message-file", "-"],
+        ] {
+            let error = Cli::try_parse_from(args).unwrap_err();
+
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
     }
 
     #[test]

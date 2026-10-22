@@ -43,7 +43,7 @@ The binary is written to `target/release/cococheck`.
 
 ## Usage
 
-Run `cococheck` in a Git repository to check all commits from the first commit up to `HEAD`:
+Run `cococheck` in a Git repository to check all commits up to `HEAD`:
 
 ```shell
 cococheck
@@ -73,8 +73,9 @@ CoCoCheck finished checking 3 commits.
 
 ### Options
 
-| Option                  | Description                                                  | Default     |
+| Argument or option      | Description                                                  | Default     |
 |-------------------------|--------------------------------------------------------------|-------------|
+| `[REVISION_RANGE]`      | A commit or a [range of commits](#selecting-commits).        | All commits |
 | `-i`, `--input <INPUT>` | Path to the Git repository to check.                         | `.`         |
 | `-c`, `--config <PATH>` | Path to the [configuration](#configuration) file.            | See below   |
 | `--from <FROM>`         | Check only commits after this one. It is not checked itself. | All commits |
@@ -89,30 +90,37 @@ Without `--config`, CoCoCheck reads `cococheck.yml` from the repository given by
 uses the default configuration if that file does not exist. A file given with `--config` must exist;
 otherwise CoCoCheck fails with an error.
 
-`--from` and `--to` accept any Git revision that resolves to a commit, such as a commit ID, a branch
-or tag name, or an expression like `HEAD~3`. Like Git's `FROM..TO` notation, the range contains
-the commits that are reachable from `--to`, but not from `--from`, so `--from` itself is not
-checked. `--from` does not have to be an ancestor of `--to`, so a branch can be checked against a
-`main` branch that has moved on since the branch was created. If the range is empty, for example
-because both are the same commit, the check passes.
+### Selecting commits
 
-For example, to check the last three commits on the current branch:
+Without arguments, CoCoCheck checks all commits up to `HEAD`. To check only some commits, pass a
+revision or a revision range, like for `git show`:
 
-```shell
-cococheck --from HEAD~3
-```
+| Argument   | Checked commits                                              |
+|------------|--------------------------------------------------------------|
+| `HEAD`     | Only the commit `HEAD`.                                      |
+| `HEAD~3..` | The last three commits, `HEAD~2` to `HEAD`.                  |
+| `main..`   | The commits of the current branch that are not on `main`.    |
+| `v1..v2`   | The commits that are reachable from `v2`, but not from `v1`. |
 
-To check only the commits of a feature branch that are not on `main`:
+A revision is anything that Git resolves to a commit, such as a commit ID, a branch or tag name, or
+an expression like `HEAD~3`. Note that unlike for `git log`, a single revision selects only that
+commit, not all commits up to it.
 
-```shell
-cococheck --from main
-```
+Like in Git, the range `A..B` contains the commits that are reachable from `B`, but not from `A`, so
+`A` itself is not checked. An omitted end of the range means `HEAD`. `A` does not have to be an
+ancestor of `B`, so a branch can be checked against a `main` branch that has moved on since the
+branch was created. If the range is empty, for example because both ends are the same commit, the
+check passes. The symmetric difference `A...B` is not supported.
+
+Alternatively, the ends of the range can be given with `--from` and `--to`: `--from A --to B` is the
+same as `A..B`. Both are optional, so `--to B` checks all commits up to `B`, which cannot be
+expressed with a revision range. `--from` and `--to` cannot be combined with a revision range.
 
 ### `commit-msg` hook
 
 To check a commit message before the commit is created, pass the file that contains the message
 with `--message-file`, or `-` to read the message from standard input. This cannot be combined with
-`--from` and `--to`.
+a revision range, `--from` or `--to`.
 
 Like Git, CoCoCheck cleans up the message before checking it: It removes comment lines and, for
 `git commit --verbose`, the scissors line and the diff below it, and removes surplus whitespace.
@@ -421,7 +429,7 @@ checks the commits of every pull request with the CoCoCheck version from that pu
 the same check locally:
 
 ```shell
-cargo run -p cococheck-cli -- --from main
+cargo run -p cococheck-cli -- main..
 ```
 
 ## License
