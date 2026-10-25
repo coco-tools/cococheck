@@ -27,6 +27,7 @@ impl RuleSet {
         rule_set.add(&rules.description_case);
         rule_set.add(&rules.header_length);
         rule_set.add(&rules.no_description_terminal_punctuation);
+        rule_set.add(&rules.no_trailing_whitespace);
         rule_set.add(&rules.required_footers);
         rule_set.add(&rules.scope_case);
         rule_set.add(&rules.scope_presence);
@@ -79,6 +80,7 @@ mod tests {
                 "body_line_length",
                 "description_case",
                 "no_description_terminal_punctuation",
+                "no_trailing_whitespace",
                 "required_footers",
                 "scope_case",
                 "scope_presence",
@@ -138,6 +140,7 @@ mod tests {
                     Severity::Error,
                     1
                 ),
+                ("no_trailing_whitespace".to_string(), Severity::Error, 0),
                 ("required_footers".to_string(), Severity::Error, 0),
                 ("scope_case".to_string(), Severity::Error, 0),
                 ("scope_presence".to_string(), Severity::Error, 0),
