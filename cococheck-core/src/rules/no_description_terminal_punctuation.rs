@@ -7,7 +7,7 @@ pub struct NoDescriptionTerminalPunctuation {}
 
 impl Rule for NoDescriptionTerminalPunctuation {
     fn name(&self) -> &str {
-        "NoDescriptionTerminalPunctuation"
+        "no_description_terminal_punctuation"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

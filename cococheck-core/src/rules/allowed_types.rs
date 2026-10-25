@@ -23,7 +23,7 @@ impl Default for AllowedTypes {
 
 impl Rule for AllowedTypes {
     fn name(&self) -> &str {
-        "AllowedTypes"
+        "allowed_types"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

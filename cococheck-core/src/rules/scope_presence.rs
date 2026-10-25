@@ -25,7 +25,7 @@ pub enum Presence {
 
 impl Rule for ScopePresence {
     fn name(&self) -> &str {
-        "ScopePresence"
+        "scope_presence"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

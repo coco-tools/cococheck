@@ -7,7 +7,7 @@ pub struct TypeCase {}
 
 impl Rule for TypeCase {
     fn name(&self) -> &str {
-        "TypeCase"
+        "type_case"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

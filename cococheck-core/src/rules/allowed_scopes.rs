@@ -11,7 +11,7 @@ pub struct AllowedScopes {
 
 impl Rule for AllowedScopes {
     fn name(&self) -> &str {
-        "AllowedScopes"
+        "allowed_scopes"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
