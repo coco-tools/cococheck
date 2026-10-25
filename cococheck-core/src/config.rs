@@ -166,6 +166,15 @@ pub enum ConfigError {
         path: Option<PathBuf>,
         error: Box<serde_saphyr::Error>,
     },
+
+    #[error(
+        "found multiple configuration files, keep only one of them: {}",
+        paths.iter().map(|path| format!("'{}'", path.display())).collect::<Vec<_>>().join(", ")
+    )]
+    MultipleFiles {
+        /// The paths of the configuration files, in the order of [`CONFIG_FILE_NAMES`].
+        paths: Vec<PathBuf>,
+    },
 }
 
 /// Render a parse error, using `path` as the source name in the snippet instead of the default name.
@@ -178,6 +187,37 @@ fn render_parse_error(error: &serde_saphyr::Error, path: Option<&Path>) -> Strin
             })
         }
         None => error.render(),
+    }
+}
+
+/// The names of the files in the root of a repository that [`find_config`] looks for.
+pub const CONFIG_FILE_NAMES: &[&str] = &[
+    "cococheck.yml",
+    "cococheck.yaml",
+    ".cococheck.yml",
+    ".cococheck.yaml",
+];
+
+/// Find the configuration file in `dir`, which is one of [`CONFIG_FILE_NAMES`]. Return `None` if
+/// there is none, and an error if there is more than one, because it would be ambiguous which one
+/// applies.
+pub fn find_config(dir: &Path) -> Result<Option<PathBuf>, ConfigError> {
+    let mut paths = Vec::new();
+    for name in CONFIG_FILE_NAMES {
+        let path = dir.join(name);
+        let exists = path.try_exists().map_err(|source| ConfigError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if exists {
+            paths.push(path);
+        }
+    }
+
+    match paths.len() {
+        0 => Ok(None),
+        1 => Ok(paths.pop()),
+        _ => Err(ConfigError::MultipleFiles { paths }),
     }
 }
 
@@ -661,5 +701,43 @@ mod tests {
         let message = load_config(&path).unwrap_err().to_string();
         assert!(message.contains(&path.display().to_string()));
         assert!(!message.contains("<input>"));
+    }
+
+    #[test]
+    fn finds_no_config_file_in_empty_directory() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        assert_eq!(find_config(dir.path()).unwrap(), None);
+    }
+
+    #[test]
+    fn finds_config_file_with_any_of_the_names() {
+        for name in CONFIG_FILE_NAMES {
+            let dir = tempfile::TempDir::new().unwrap();
+            let path = dir.path().join(name);
+            std::fs::write(&path, "rules: {}").unwrap();
+
+            assert_eq!(find_config(dir.path()).unwrap(), Some(path), "{name}");
+        }
+    }
+
+    #[test]
+    fn multiple_config_files_are_an_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let paths = ["cococheck.yml", ".cococheck.yaml"].map(|name| dir.path().join(name));
+        for path in &paths {
+            std::fs::write(path, "rules: {}").unwrap();
+        }
+
+        let error = find_config(dir.path()).unwrap_err();
+
+        let message = error.to_string();
+        assert!(
+            matches!(error, ConfigError::MultipleFiles { paths: ref found } if found == &paths),
+            "{error:?}"
+        );
+        for path in &paths {
+            assert!(message.contains(&path.display().to_string()), "{message}");
+        }
     }
 }
