@@ -85,6 +85,7 @@ CoCoCheck finished checking 3 commits.
 | `--format <FORMAT>`     | Report as `text` or [`json`](#json-output).                  | `text`      |
 | `--print-config`        | Print the [configuration](#effective-configuration) and exit |             |
 |                         | without checking commits.                                    |             |
+| `--color <WHEN>`        | [Color](#colors) the text report: `auto`, `always`, `never`. | `auto`      |
 | `-v`, `--verbose`       | Log informational messages, such as passed commits. Give it  |             |
 |                         | twice (`-vv`) to also log debug messages, such as the parsed |             |
 |                         | commits.                                                     |             |
@@ -202,7 +203,20 @@ error: invalid header: the scope must not be empty
   |     ^^
 ```
 
-When standard output is a terminal, the report is colored.
+#### Colors
+
+By default, the text report is colored when standard output is a terminal. To choose explicitly,
+pass `--color always` or `--color never`, for example `--color always` in a CI system like GitHub
+Actions, which shows colors, but does not run CoCoCheck in a terminal.
+
+With the default `--color auto`, the following environment variables are also respected:
+
+- [`NO_COLOR`](https://no-color.org/): If it is set to a non-empty value, the report is not
+  colored.
+- [`CLICOLOR_FORCE`](https://bixense.com/clicolors/): If it is set to a value other than `0`, the
+  report is colored, even if standard output is not a terminal. `NO_COLOR` takes precedence.
+
+`--color always` and `--color never` override both variables.
 
 ### JSON output
 
