@@ -68,6 +68,10 @@ struct Cli {
     #[arg(long, value_enum, value_name = "WHEN", default_value_t = ColorChoice::Auto)]
     color: ColorChoice,
 
+    /// Fail the checks for commits that only violate rules with the severity `warning`
+    #[arg(long)]
+    deny_warnings: bool,
+
     /// Log informational messages, or also debug messages if given twice
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -165,7 +169,7 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
         None => collect_commits(args)?,
     };
 
-    let checker = Checker::new(&config);
+    let checker = Checker::new(&config, args.deny_warnings);
     let reports = messages.iter().map(|message| checker.check(message));
 
     let outcomes = match args.format {
@@ -305,8 +309,8 @@ enum Outcome {
     /// The commit violated only rules with the severity `warning`.
     PassedWithWarnings,
 
-    /// The commit message matches a forbidden pattern, could not be parsed, or violated a rule with
-    /// the severity `error`.
+    /// The commit message matches a forbidden pattern, could not be parsed, violated a rule with the
+    /// severity `error`, or violated a rule with the severity `warning` and warnings are denied.
     Failed,
 }
 
@@ -334,13 +338,16 @@ struct Forbidden {
 struct Checker<'a> {
     config: &'a Config,
     rule_set: RuleSet,
+    /// Whether a commit that only violates rules with the severity `warning` fails.
+    deny_warnings: bool,
 }
 
 impl<'a> Checker<'a> {
-    fn new(config: &'a Config) -> Self {
+    fn new(config: &'a Config, deny_warnings: bool) -> Self {
         Checker {
             config,
             rule_set: RuleSet::new(config),
+            deny_warnings,
         }
     }
 
@@ -391,7 +398,11 @@ impl<'a> Checker<'a> {
         let outcome = if has_violations(Severity::Error) {
             Outcome::Failed
         } else if has_violations(Severity::Warning) {
-            Outcome::PassedWithWarnings
+            if self.deny_warnings {
+                Outcome::Failed
+            } else {
+                Outcome::PassedWithWarnings
+            }
         } else {
             info!("{} passed.", message.name);
             Outcome::Passed
@@ -772,7 +783,7 @@ mod tests {
             message(Some("e5"), "Merge branch 'feature'"),
             message(Some("f6"), "fixup! feat: Add a feature"),
         ];
-        let checker = Checker::new(&config);
+        let checker = Checker::new(&config, false);
         let reports: Vec<Report> = messages.iter().map(|m| checker.check(m)).collect();
 
         let mut json = serde_json::to_value(JsonReport::new(&reports)).unwrap();
@@ -952,6 +963,27 @@ mod tests {
                 "{choice:?} with {vars:?}, terminal: {is_terminal}"
             );
         }
+    }
+
+    #[test]
+    fn denied_warnings_fail_the_commit() {
+        let config = cococheck_core::config::parse_config(
+            "rules: { header_length: { severity: warning, max_length: 10 } }",
+        )
+        .unwrap();
+        let too_long = message(None, "feat: Add a feature\n");
+        let valid = message(None, "feat: Add\n");
+
+        let checker = Checker::new(&config, false);
+        assert_eq!(
+            checker.check(&too_long).outcome,
+            Outcome::PassedWithWarnings
+        );
+        assert_eq!(checker.check(&valid).outcome, Outcome::Passed);
+
+        let checker = Checker::new(&config, true);
+        assert_eq!(checker.check(&too_long).outcome, Outcome::Failed);
+        assert_eq!(checker.check(&valid).outcome, Outcome::Passed);
     }
 
     #[test]
