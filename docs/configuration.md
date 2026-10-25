@@ -99,7 +99,7 @@ starting point for a new one:
 cococheck --print-config > cococheck.yml
 ```
 
-`--print-config` respects `--input` and `--config`, but cannot be combined with the options that
+`--print-config` respects `--repository` and `--config`, but cannot be combined with the options that
 select the commits to check.
 
 ## Message structure

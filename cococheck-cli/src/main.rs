@@ -18,8 +18,8 @@ use std::process::ExitCode;
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Path to the Git repository
-    #[arg(short, long, default_value = ".")]
-    input: PathBuf,
+    #[arg(short, long, value_name = "PATH", default_value = ".")]
+    repository: PathBuf,
 
     /// Path to the config file (default: cococheck.yml or .cococheck.yml in the repository, if it
     /// exists, or the same with the .yaml extension)
@@ -155,17 +155,17 @@ fn main() -> ExitCode {
 
 /// Check the commit messages selected by `args`. Return whether all messages passed the checks.
 fn run(args: &Cli) -> anyhow::Result<bool> {
-    let (config, config_path) = load_config_or_default(&args.input, args.config.as_deref())?;
+    let (config, config_path) = load_config_or_default(&args.repository, args.config.as_deref())?;
 
     if args.print_config {
         print_config(&config, config_path.as_deref())?;
         return Ok(true);
     }
 
-    info!("Checking Git repository at: {}", args.input.display());
+    info!("Checking Git repository at: {}", args.repository.display());
 
     let messages = match &args.message_file {
-        Some(path) => vec![read_message_file(&args.input, path, &config)?],
+        Some(path) => vec![read_message_file(&args.repository, path, &config)?],
         None => collect_commits(args)?,
     };
 
@@ -231,7 +231,7 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
     let to = args.to.as_deref().unwrap_or("HEAD");
 
     let from = if args.from_latest_tag {
-        let tag = find_latest_tag(&args.input, args.to.as_deref())?;
+        let tag = find_latest_tag(&args.repository, args.to.as_deref())?;
         match &tag {
             Some(tag) => info!("Found latest tag {tag}."),
             None => info!("No tag is reachable from {to}, checking all commits."),
@@ -242,14 +242,18 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
     };
 
     let range = match &args.revisions {
-        Some(revisions) => get_commits_for_revisions(&args.input, revisions)?,
+        Some(revisions) => get_commits_for_revisions(&args.repository, revisions)?,
         None => {
             // Resolve a tag as a tag, even if a branch has the same name.
             let from_revision = match (&from, args.from_latest_tag) {
                 (Some(tag), true) => Some(format!("refs/tags/{tag}")),
                 _ => from.clone(),
             };
-            get_commits(&args.input, from_revision.as_deref(), args.to.as_deref())?
+            get_commits(
+                &args.repository,
+                from_revision.as_deref(),
+                args.to.as_deref(),
+            )?
         }
     };
 
@@ -849,6 +853,20 @@ mod tests {
 
         let args = Cli::try_parse_from(["cococheck", "--format", "json"]).unwrap();
         assert_eq!(args.format, Format::Json);
+    }
+
+    #[test]
+    fn repository_defaults_to_the_current_directory() {
+        let args = Cli::try_parse_from(["cococheck"]).unwrap();
+        assert_eq!(args.repository, PathBuf::from("."));
+
+        for args in [
+            ["cococheck", "-r", "repo"],
+            ["cococheck", "--repository", "repo"],
+        ] {
+            let args = Cli::try_parse_from(args).unwrap();
+            assert_eq!(args.repository, PathBuf::from("repo"));
+        }
     }
 
     #[test]

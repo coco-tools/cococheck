@@ -73,28 +73,28 @@ CoCoCheck finished checking 3 commits.
 
 ### Options
 
-| Argument or option      | Description                                                  | Default     |
-|-------------------------|--------------------------------------------------------------|-------------|
-| `[REVISION_RANGE]`      | A commit or a [range of commits](#selecting-commits).        | All commits |
-| `-i`, `--input <INPUT>` | Path to the Git repository to check.                         | `.`         |
-| `-c`, `--config <PATH>` | Path to the [configuration](#configuration) file.            | See below   |
-| `--from <FROM>`         | Check only commits after this one. It is not checked itself. | All commits |
-| `--to <TO>`             | Last commit to check. The commit itself is checked.          | `HEAD`      |
-| `--from-latest-tag`     | Check only commits after the [latest tag](#latest-tag).      |             |
-| `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).             |             |
-| `--format <FORMAT>`     | Report as `text` or [`json`](#json-output).                  | `text`      |
-| `--print-config`        | Print the [configuration](#configuration) and exit           |             |
-|                         | without checking commits.                                    |             |
-| `--color <WHEN>`        | [Color](#colors) the text report: `auto`, `always`, `never`. | `auto`      |
-| `--deny-warnings`       | Fail commits that only have [warnings](docs/rules.md).       |             |
-| `-v`, `--verbose`       | Log informational messages, such as passed commits. Give it  |             |
-|                         | twice (`-vv`) to also log debug messages, such as the parsed |             |
-|                         | commits.                                                     |             |
-| `-h`, `--help`          | Print help.                                                  |             |
-| `-V`, `--version`       | Print the version.                                           |             |
+| Argument or option          | Description                                                  | Default     |
+|-----------------------------|--------------------------------------------------------------|-------------|
+| `[REVISION_RANGE]`          | A commit or a [range of commits](#selecting-commits).        | All commits |
+| `-r`, `--repository <PATH>` | Path to the Git repository to check.                         | `.`         |
+| `-c`, `--config <PATH>`     | Path to the [configuration](#configuration) file.            | See below   |
+| `--from <FROM>`             | Check only commits after this one. It is not checked itself. | All commits |
+| `--to <TO>`                 | Last commit to check. The commit itself is checked.          | `HEAD`      |
+| `--from-latest-tag`         | Check only commits after the [latest tag](#latest-tag).      |             |
+| `--message-file <FILE>`     | Check the [message in a file](#commit-msg-hook).             |             |
+| `--format <FORMAT>`         | Report as `text` or [`json`](#json-output).                  | `text`      |
+| `--print-config`            | Print the [configuration](#configuration) and exit           |             |
+|                             | without checking commits.                                    |             |
+| `--color <WHEN>`            | [Color](#colors) the text report: `auto`, `always`, `never`. | `auto`      |
+| `--deny-warnings`           | Fail commits that only have [warnings](docs/rules.md).       |             |
+| `-v`, `--verbose`           | Log informational messages, such as passed commits. Give it  |             |
+|                             | twice (`-vv`) to also log debug messages, such as the parsed |             |
+|                             | commits.                                                     |             |
+| `-h`, `--help`              | Print help.                                                  |             |
+| `-V`, `--version`           | Print the version.                                           |             |
 
 Without `--config`, CoCoCheck reads the [configuration file](#configuration) from the repository
-given by `--input`, and uses the default configuration if there is none. A file given with
+given by `--repository`, and uses the default configuration if there is none. A file given with
 `--config` must exist; otherwise CoCoCheck fails with an error.
 
 ### Selecting commits
