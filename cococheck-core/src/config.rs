@@ -1,8 +1,8 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
-    AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLineLength, DescriptionCase,
-    HeaderLength, NoDescriptionTerminalPunctuation, NoTrailingWhitespace, RequiredFooters,
-    RuleConfig, ScopeCase, ScopePresence, TypeCase,
+    AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLength, BodyLineLength,
+    DescriptionCase, HeaderLength, NoDescriptionTerminalPunctuation, NoTrailingWhitespace,
+    RequiredFooters, RuleConfig, ScopeCase, ScopePresence, TypeCase,
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -179,6 +179,9 @@ pub struct RulesConfig {
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub blank_line_before_footer: RuleConfig<BlankLineBeforeFooter>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub body_length: RuleConfig<BodyLength>,
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub body_line_length: RuleConfig<BodyLineLength>,

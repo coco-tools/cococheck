@@ -74,6 +74,9 @@ pub use allowed_types::AllowedTypes;
 mod blank_line_before_footer;
 pub use blank_line_before_footer::BlankLineBeforeFooter;
 
+mod body_length;
+pub use body_length::BodyLength;
+
 mod body_line_length;
 pub use body_line_length::BodyLineLength;
 
