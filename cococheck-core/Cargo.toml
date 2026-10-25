@@ -1,9 +1,16 @@
 [package]
 name = "cococheck-core"
 version.workspace = true
+description = "The parser, configuration, and rules of CoCoCheck, a checker for Conventional Commits messages"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../README.md"
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 git2 = { workspace = true }
