@@ -25,6 +25,7 @@ impl RuleSet {
         rule_set.add(&rules.blank_line_before_footer);
         rule_set.add(&rules.body_length);
         rule_set.add(&rules.body_line_length);
+        rule_set.add(&rules.breaking_change);
         rule_set.add(&rules.description_case);
         rule_set.add(&rules.footer_length);
         rule_set.add(&rules.footer_line_length);
@@ -82,6 +83,7 @@ mod tests {
                 "allowed_types",
                 "body_length",
                 "body_line_length",
+                "breaking_change",
                 "description_case",
                 "footer_length",
                 "footer_line_length",
@@ -140,6 +142,7 @@ mod tests {
                 ("blank_line_before_footer".to_string(), Severity::Error, 0),
                 ("body_length".to_string(), Severity::Error, 0),
                 ("body_line_length".to_string(), Severity::Error, 0),
+                ("breaking_change".to_string(), Severity::Error, 0),
                 ("description_case".to_string(), Severity::Error, 0),
                 ("footer_length".to_string(), Severity::Error, 0),
                 ("footer_line_length".to_string(), Severity::Error, 0),
