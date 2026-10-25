@@ -317,6 +317,11 @@ rules:
     severity: error
     max_length: 72
     ignore_urls: true
+  breaking_change:
+    enabled: true
+    severity: error
+    footer_required: false
+    marker_required: true
   description_case:
     enabled: true
     severity: error
@@ -588,6 +593,31 @@ checked by [`footer_line_length`](#footer_line_length).
 | `severity`    | Whether a violation is an `error` or a `warning`. | `error` |
 | `max_length`  | The maximum number of characters per line.        | `72`    |
 | `ignore_urls` | Whether lines that contain a URL are skipped.     | `true`  |
+
+#### `breaking_change`
+
+The Conventional Commits specification allows marking a breaking change with a `!` before the `:`
+in the header, with a `BREAKING CHANGE` or `BREAKING-CHANGE` footer, or with both. This rule
+requires a consistent style. By default, a footer requires a `!`, so that breaking changes are
+visible in one-line logs. To also require a footer that describes the change if the header has a
+`!`:
+
+```yaml
+rules:
+  breaking_change:
+    footer_required: true
+```
+
+Like the other footers, a `BREAKING CHANGE` footer is only recognized after a blank line, at the end
+of the message, as described for the [parser](#parser). To allow a footer without a `!`, set
+`marker_required` to `false`.
+
+| Setting           | Description                                                      | Default |
+|-------------------|------------------------------------------------------------------|---------|
+| `enabled`         | Whether the rule is applied.                                     | `true`  |
+| `severity`        | Whether a violation is an `error` or a `warning`.                | `error` |
+| `footer_required` | Whether a `!` in the header requires a `BREAKING CHANGE` footer. | `false` |
+| `marker_required` | Whether a `BREAKING CHANGE` footer requires a `!` in the header. | `true`  |
 
 #### `description_case`
 

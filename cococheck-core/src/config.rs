@@ -1,6 +1,6 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
-    AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLength, BodyLineLength,
+    AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLength, BodyLineLength, BreakingChange,
     DescriptionCase, FooterLength, FooterLineLength, HeaderLength,
     NoDescriptionTerminalPunctuation, NoTrailingWhitespace, RequiredFooters, RuleConfig, ScopeCase,
     ScopePresence, TypeCase,
@@ -186,6 +186,9 @@ pub struct RulesConfig {
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub body_line_length: RuleConfig<BodyLineLength>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub breaking_change: RuleConfig<BreakingChange>,
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub description_case: RuleConfig<DescriptionCase>,
@@ -743,6 +746,24 @@ mod tests {
             FooterLineLength {
                 max_length: Some(100),
                 ignore_urls: false,
+            }
+        );
+    }
+
+    #[test]
+    fn read_breaking_change() {
+        let yaml = r#"
+        rules:
+          breaking_change:
+            footer_required: true
+            marker_required: true
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.breaking_change.rule,
+            BreakingChange {
+                footer_required: true,
+                marker_required: true,
             }
         );
     }
