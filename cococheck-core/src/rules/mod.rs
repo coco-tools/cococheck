@@ -88,6 +88,9 @@ pub use body_length::BodyLength;
 mod body_line_length;
 pub use body_line_length::BodyLineLength;
 
+mod breaking_change;
+pub use breaking_change::BreakingChange;
+
 mod description_case;
 pub use description_case::{DescriptionCase, DescriptionCaseMode};
 
