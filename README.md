@@ -27,7 +27,7 @@ CoCoCheck requires Rust 1.89 or later. Install the latest version from the Git r
 Cargo:
 
 ```shell
-cargo install --git https://github.com/mnonnenmacher/cococheck cococheck-cli
+cargo install --git https://github.com/mnonnenmacher/cococheck cococheck
 ```
 
 This installs the `cococheck` binary into Cargo's binary directory, usually `~/.cargo/bin`.
@@ -560,7 +560,7 @@ The repository is a Cargo workspace with two crates:
 
 - [`cococheck-core`](cococheck-core) contains the commit message parser, the configuration, and the
   rules.
-- [`cococheck-cli`](cococheck-cli) contains the `cococheck` command-line tool.
+- [`cococheck-cli`](cococheck-cli) contains the `cococheck` package with the command-line tool.
 
 ## Contributing
 
@@ -595,7 +595,7 @@ checks the commits of every pull request, and the commits pushed to `main`, with
 version that contains them. To run the same check locally:
 
 ```shell
-cargo run -p cococheck-cli -- main..
+cargo run -p cococheck -- main..
 ```
 
 ### Developer Certificate of Origin
