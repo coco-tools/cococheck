@@ -307,9 +307,10 @@ To see the effective configuration, including the defaults of all omitted settin
 
 The repository is a Cargo workspace with two crates:
 
+- The root directory contains the `cococheck` package with the command-line tool. It is in the
+  root, so that [pre-commit](#hook-managers) can install it from the repository.
 - [`cococheck-core`](cococheck-core) contains the commit message parser, the configuration, and the
   rules.
-- [`cococheck-cli`](cococheck-cli) contains the `cococheck` package with the command-line tool.
 
 The [`docs`](docs) directory contains the reference of the configuration and the rules.
 
