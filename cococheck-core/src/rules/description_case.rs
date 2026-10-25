@@ -1,15 +1,15 @@
 use crate::parser::ConventionalCommit;
 use crate::rules::{Rule, RuleError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 pub struct DescriptionCase {
     pub case: DescriptionCaseMode,
 }
 
 /// The required case of the first letter of the description.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DescriptionCaseMode {
     /// The description must start with a lowercase letter, like `add a feature`.

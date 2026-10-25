@@ -1,8 +1,8 @@
 use crate::parser::ConventionalCommit;
 use crate::rules::{Rule, RuleError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct NoDescriptionTerminalPunctuation {}
 
 impl Rule for NoDescriptionTerminalPunctuation {
