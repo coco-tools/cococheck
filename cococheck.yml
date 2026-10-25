@@ -1,3 +1,5 @@
 rules:
   description_case:
     case: sentence
+  required_footers:
+    tokens: [Signed-off-by]
