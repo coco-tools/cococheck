@@ -23,6 +23,7 @@ impl RuleSet {
         rule_set.add(&rules.allowed_scopes);
         rule_set.add(&rules.allowed_types);
         rule_set.add(&rules.blank_line_before_footer);
+        rule_set.add(&rules.body_length);
         rule_set.add(&rules.body_line_length);
         rule_set.add(&rules.description_case);
         rule_set.add(&rules.header_length);
@@ -77,6 +78,7 @@ mod tests {
             vec![
                 "allowed_scopes",
                 "allowed_types",
+                "body_length",
                 "body_line_length",
                 "description_case",
                 "no_description_terminal_punctuation",
@@ -132,6 +134,7 @@ mod tests {
                 ("allowed_scopes".to_string(), Severity::Error, 0),
                 ("allowed_types".to_string(), Severity::Error, 0),
                 ("blank_line_before_footer".to_string(), Severity::Error, 0),
+                ("body_length".to_string(), Severity::Error, 0),
                 ("body_line_length".to_string(), Severity::Error, 0),
                 ("description_case".to_string(), Severity::Error, 0),
                 ("header_length".to_string(), Severity::Warning, 1),
