@@ -61,6 +61,10 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = Format::Text)]
     format: Format,
 
+    /// When to color the text report
+    #[arg(long, value_enum, value_name = "WHEN", default_value_t = ColorChoice::Auto)]
+    color: ColorChoice,
+
     /// Log informational messages, or also debug messages if given twice
     #[arg(short, long, action = clap::ArgAction::Count)]
     verbose: u8,
@@ -74,6 +78,44 @@ enum Format {
 
     /// A single JSON document with the results of all checked commits.
     Json,
+}
+
+/// When to color the text report.
+#[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
+enum ColorChoice {
+    /// Color the report if standard output is a terminal or the `CLICOLOR_FORCE` environment
+    /// variable is set, unless the `NO_COLOR` environment variable is set.
+    Auto,
+
+    /// Always color the report.
+    Always,
+
+    /// Never color the report.
+    Never,
+}
+
+impl ColorChoice {
+    /// Return whether to color the output, using `env` to look up environment variables. For
+    /// `auto`, follow the conventions of <https://no-color.org/> and
+    /// <https://bixense.com/clicolors/>: `NO_COLOR` disables colors if it is set to a non-empty
+    /// value, which takes precedence over `CLICOLOR_FORCE`, which enables colors if it is set to a
+    /// value other than `0`. Otherwise, color the output if it is a terminal.
+    fn use_color(self, env: impl Fn(&str) -> Option<String>, is_terminal: bool) -> bool {
+        match self {
+            ColorChoice::Always => true,
+            ColorChoice::Never => false,
+            ColorChoice::Auto => {
+                let is_set = |name, off: &str| env(name).is_some_and(|value| value != off);
+                if is_set("NO_COLOR", "") {
+                    false
+                } else if is_set("CLICOLOR_FORCE", "0") {
+                    true
+                } else {
+                    is_terminal
+                }
+            }
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -124,7 +166,13 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     let reports = messages.iter().map(|message| checker.check(message));
 
     let outcomes = match args.format {
-        Format::Text => print_text_report(reports),
+        Format::Text => {
+            let color = args.color.use_color(
+                |name| std::env::var(name).ok(),
+                std::io::stdout().is_terminal(),
+            );
+            print_text_report(reports, color)
+        }
         Format::Json => print_json_report(reports)?,
     };
 
@@ -132,9 +180,9 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
 }
 
 /// Print the errors and warnings of the `reports` as text, as soon as each commit is checked, and a
-/// summary at the end. Return the outcomes of the commits.
-fn print_text_report<'a>(reports: impl Iterator<Item = Report<'a>>) -> Vec<Outcome> {
-    let reporter = TextReporter::new();
+/// summary at the end. Color the report if `color` is `true`. Return the outcomes of the commits.
+fn print_text_report<'a>(reports: impl Iterator<Item = Report<'a>>, color: bool) -> Vec<Outcome> {
+    let reporter = TextReporter::new(color);
     let outcomes: Vec<Outcome> = reports
         .map(|report| {
             reporter.print_report(&report);
@@ -360,8 +408,8 @@ struct TextReporter {
 }
 
 impl TextReporter {
-    fn new() -> Self {
-        let renderer = if std::io::stdout().is_terminal() {
+    fn new(color: bool) -> Self {
+        let renderer = if color {
             Renderer::styled()
         } else {
             Renderer::plain()
@@ -858,6 +906,49 @@ mod tests {
 
         let args = Cli::try_parse_from(["cococheck", "--from-latest-tag", "--to", "HEAD"]).unwrap();
         assert!(args.from_latest_tag);
+    }
+
+    #[test]
+    fn color_defaults_to_auto() {
+        let args = Cli::try_parse_from(["cococheck"]).unwrap();
+        assert_eq!(args.color, ColorChoice::Auto);
+
+        let args = Cli::try_parse_from(["cococheck", "--color", "never"]).unwrap();
+        assert_eq!(args.color, ColorChoice::Never);
+    }
+
+    #[test]
+    fn color_choice_follows_the_terminal_and_the_environment() {
+        let env = |vars: &'static [(&'static str, &'static str)]| {
+            move |name: &str| {
+                vars.iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| value.to_string())
+            }
+        };
+
+        for (choice, vars, is_terminal, expected) in [
+            (ColorChoice::Auto, &[][..], true, true),
+            (ColorChoice::Auto, &[], false, false),
+            (ColorChoice::Auto, &[("NO_COLOR", "1")], true, false),
+            (ColorChoice::Auto, &[("NO_COLOR", "")], true, true),
+            (ColorChoice::Auto, &[("CLICOLOR_FORCE", "1")], false, true),
+            (ColorChoice::Auto, &[("CLICOLOR_FORCE", "0")], false, false),
+            (
+                ColorChoice::Auto,
+                &[("NO_COLOR", "1"), ("CLICOLOR_FORCE", "1")],
+                false,
+                false,
+            ),
+            (ColorChoice::Always, &[("NO_COLOR", "1")], false, true),
+            (ColorChoice::Never, &[("CLICOLOR_FORCE", "1")], true, false),
+        ] {
+            assert_eq!(
+                choice.use_color(env(vars), is_terminal),
+                expected,
+                "{choice:?} with {vars:?}, terminal: {is_terminal}"
+            );
+        }
     }
 
     #[test]
