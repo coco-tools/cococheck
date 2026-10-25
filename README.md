@@ -203,7 +203,7 @@ CoCoCheck then writes a single JSON document to standard output instead of the t
         {
           "rule": "no_description_terminal_punctuation",
           "severity": "error",
-          "errors": [
+          "violations": [
             {
               "message": "Description should not end with terminal punctuation (., !, ?).",
               "span": { "start": 23, "end": 24 }
@@ -229,7 +229,7 @@ The example shows only one rule; the report lists every enabled rule.
 | `commits[].rules`       | The results of all enabled rules, or an empty list if the commit is ignored or could not be parsed.                 |
 | `rules[].rule`          | The name of the rule, as used in the configuration.                                                                 |
 | `rules[].severity`      | The configured severity of the rule, `error` or `warning`.                                                          |
-| `rules[].errors`        | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.               |
+| `rules[].violations`    | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.               |
 | `span`                  | The byte range `start..end` in the full commit message that a violation refers to, or `null` if it has no location. |
 | `summary`               | The number of `checked` and `ignored` commits, and of the commits that `passed_with_warnings` or `failed`.          |
 
