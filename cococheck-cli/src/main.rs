@@ -864,7 +864,7 @@ mod tests {
                                 "rule": "no_description_terminal_punctuation",
                                 "severity": "error",
                                 "violations": [{
-                                    "message": "Description should not end with terminal punctuation (., !, ?).",
+                                    "message": "Description should not end with terminal punctuation '.'.",
                                     "span": { "start": 36, "end": 37 }
                                 }]
                             }
