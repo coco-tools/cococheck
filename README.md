@@ -50,7 +50,7 @@ Run `cococheck` in a Git repository to check all commits up to `HEAD`:
 cococheck
 ```
 
-CoCoCheck parses each commit message, applies the enabled [rules](#rules), and reports every
+CoCoCheck parses each commit message, applies the enabled [rules](docs/rules.md), and reports every
 commit that fails:
 
 ```text
@@ -84,10 +84,10 @@ CoCoCheck finished checking 3 commits.
 | `--from-latest-tag`     | Check only commits after the [latest tag](#latest-tag).      |             |
 | `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).             |             |
 | `--format <FORMAT>`     | Report as `text` or [`json`](#json-output).                  | `text`      |
-| `--print-config`        | Print the [configuration](#effective-configuration) and exit |             |
+| `--print-config`        | Print the [configuration](#configuration) and exit           |             |
 |                         | without checking commits.                                    |             |
 | `--color <WHEN>`        | [Color](#colors) the text report: `auto`, `always`, `never`. | `auto`      |
-| `--deny-warnings`       | Fail commits that only have [warnings](#rules).              |             |
+| `--deny-warnings`       | Fail commits that only have [warnings](docs/rules.md).       |             |
 | `-v`, `--verbose`       | Log informational messages, such as passed commits. Give it  |             |
 |                         | twice (`-vv`) to also log debug messages, such as the parsed |             |
 |                         | commits.                                                     |             |
@@ -167,8 +167,8 @@ exec cococheck --message-file "$1"
 ```
 
 Git runs the hook in the root of the working tree, so CoCoCheck reads the configuration file of the
-repository. A message is not checked if it is [ignored](#ignored-commits), for example the message
-of a merge commit. To create a single commit without running the hook, use
+repository. A message is not checked if it is [ignored](docs/configuration.md#ignored-commits), for
+example the message of a merge commit. To create a single commit without running the hook, use
 `git commit --no-verify`.
 
 ### Output and exit status
@@ -182,7 +182,7 @@ The `RUST_LOG` environment variable overrides the log level set with `-v`, for e
 the syntax.
 
 Each rule violation is reported with the name of the rule, as used in the
-[configuration](#rules), and, where possible, a snippet of the commit message that marks the
+[configuration](docs/rules.md), and, where possible, a snippet of the commit message that marks the
 offending part:
 
 ```text
@@ -254,566 +254,54 @@ CoCoCheck then writes a single JSON document to standard output instead of the t
 
 The example shows only one rule; the report lists every enabled rule.
 
-| Field                         | Description                                                                                                         |
-|-------------------------------|---------------------------------------------------------------------------------------------------------------------|
-| `commits`                     | The checked commits, ordered from oldest to newest, including the ignored ones.                                     |
-| `commits[].id`                | The commit ID, or `null` for a message checked with `--message-file`.                                               |
-| `commits[].header`            | The first line of the commit message.                                                                               |
-| `commits[].outcome`           | `passed`, `passed_with_warnings`, `failed`, or `ignored`.                                                           |
-| `commits[].forbidden_pattern` | Why the message matches a [forbidden pattern](#forbidden-commits), with a `message` and a `span`, or `null`.        |
-| `commits[].parse_error`       | Why the message could not be parsed, with a `message` and a `span`, or `null`. No rules are applied if it is set.   |
-| `commits[].rules`             | The results of all enabled rules, or an empty list if the commit is ignored or could not be parsed.                 |
-| `rules[].rule`                | The name of the rule, as used in the configuration.                                                                 |
-| `rules[].severity`            | The configured severity of the rule, `error` or `warning`.                                                          |
-| `rules[].violations`          | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.               |
-| `span`                        | The byte range `start..end` in the full commit message that a violation refers to, or `null` if it has no location. |
-| `summary`                     | The number of `checked` and `ignored` commits, and of the commits that `passed_with_warnings` or `failed`.          |
+| Field                         | Description                                                                                                                       |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `commits`                     | The checked commits, ordered from oldest to newest, including the ignored ones.                                                   |
+| `commits[].id`                | The commit ID, or `null` for a message checked with `--message-file`.                                                             |
+| `commits[].header`            | The first line of the commit message.                                                                                             |
+| `commits[].outcome`           | `passed`, `passed_with_warnings`, `failed`, or `ignored`.                                                                         |
+| `commits[].forbidden_pattern` | Why the message matches a [forbidden pattern](docs/configuration.md#forbidden-commits), with a `message` and a `span`, or `null`. |
+| `commits[].parse_error`       | Why the message could not be parsed, with a `message` and a `span`, or `null`. No rules are applied if it is set.                 |
+| `commits[].rules`             | The results of all enabled rules, or an empty list if the commit is ignored or could not be parsed.                               |
+| `rules[].rule`                | The name of the rule, as used in the configuration.                                                                               |
+| `rules[].severity`            | The configured severity of the rule, `error` or `warning`.                                                                        |
+| `rules[].violations`          | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.                             |
+| `span`                        | The byte range `start..end` in the full commit message that a violation refers to, or `null` if it has no location.               |
+| `summary`                     | The number of `checked` and `ignored` commits, and of the commits that `passed_with_warnings` or `failed`.                        |
 
 The exit status is the same as for the text report.
 
 CoCoCheck exits with status `0` if all commits pass, and with status `1` if any commit fails or an
 error occurs, for example because the repository or a revision cannot be found. Violations of rules
-with the severity [`warning`](#rules) are reported, but do not cause a commit to fail, unless
+with the severity [`warning`](docs/rules.md) are reported, but do not cause a commit to fail, unless
 `--deny-warnings` is given. This makes it suitable for use in CI pipelines and Git hooks.
 
 ## Configuration
 
-CoCoCheck reads its configuration from a file in the root of the repository being checked, named
-`cococheck.yml`, or `.cococheck.yml` to keep it hidden. The `.yaml` extension works as well. If
-there is no such file, the defaults described below apply. If there is more than one, CoCoCheck
-fails with an error instead of picking one. Every section and setting is optional; omitted values
-keep their defaults. Unknown keys are rejected, so a typo in a rule name causes an error instead of
-being silently ignored.
-
-The following file sets every option to its default value:
+CoCoCheck reads its configuration from a file named `cococheck.yml` or `.cococheck.yml` in the root
+of the repository being checked; the `.yaml` extension works as well. Without such a file, the
+defaults apply: all rules are enabled, with limits like a maximum header length of 72 characters,
+and the messages that Git creates for merge, revert, and fixup commits are ignored. Every setting is
+optional, so a configuration file only needs to contain what differs from the defaults:
 
 ```yaml
-forbidden: []
-default_ignores: true
-ignore_merge_commits: true
-ignores: []
-ignore_authors: []
-
-parser:
-  footer_detection: last_paragraph
-
 rules:
   allowed_scopes:
-    enabled: true
-    severity: error
-    scopes: []
-  allowed_types:
-    enabled: true
-    severity: error
-    types: [build, chore, ci, deps, docs, feat, fix, perf, refactor, revert, style, test]
-  blank_line_before_footer:
-    enabled: true
-    severity: error
-  body_length:
-    enabled: true
-    severity: error
-    max_length: null
-    min_length: null
-  body_line_length:
-    enabled: true
-    severity: error
-    max_length: 72
-    ignore_urls: true
-  breaking_change:
-    enabled: true
-    severity: error
-    footer_required: false
-    marker_required: true
+    scopes: [cli, core]
   description_case:
-    enabled: true
-    severity: error
-    case: any
-  footer_length:
-    enabled: true
-    severity: error
-    max_length: null
-  footer_line_length:
-    enabled: true
-    severity: error
-    max_length: null
-    ignore_urls: true
-  header_length:
-    enabled: true
-    severity: error
-    max_length: 72
-  no_description_terminal_punctuation:
-    enabled: true
-    severity: error
-    characters: .!?
-  no_trailing_whitespace:
-    enabled: true
-    severity: error
-  required_footers:
-    enabled: true
-    severity: error
-    tokens: []
-  scope_case:
-    enabled: true
-    severity: error
-    case: lower
-  scope_presence:
-    enabled: true
-    severity: error
-    scope: optional
-  type_case:
-    enabled: true
-    severity: error
-```
-
-### Effective configuration
-
-To see which configuration CoCoCheck uses, pass `--print-config`. CoCoCheck then prints the
-configuration as YAML, including the defaults of all omitted settings, and exits without checking
-any commits. A comment in the first line names the file the configuration was loaded from, or says
-that no file was found. The output is a valid configuration file, so it can also be used as a
-starting point for a new one:
-
-```shell
-cococheck --print-config > cococheck.yml
-```
-
-`--print-config` respects `--input` and `--config`, but cannot be combined with the options that
-select the commits to check.
-
-### Message structure
-
-Independent of the configured rules, every commit message must have a valid Conventional Commits
-header of the form `type(scope)!: description`, where the scope and the `!` are optional. If the
-message has a body, the header must be followed by a blank line. A commit that does not meet
-these requirements fails with a parse error, and no rules are applied to it. Commits that are
-[ignored](#ignored-commits) are not checked at all.
-
-### Ignored commits
-
-Git, Git hosting platforms, and release tools create messages that do not follow the Conventional
-Commits specification, for example for merge commits. Like commitlint, CoCoCheck ignores commits
-with such messages by default. A message is ignored if it starts with one of the following:
-
-- `Merge branch `, `Merge branches `, `Merge tag `, `Merge tags `, `Merge commit `,
-  `Merge remote-tracking branch `, or `Merge pull request `, as created by `git merge`, `git pull`,
-  and GitHub or GitLab when merging a pull request.
-- `Merge X into Y`, `Merged X into Y`, `Merged in `, `Merged PR `, `Automatic merge`, or
-  `Auto-merged X into Y`, as created by Bitbucket, Azure DevOps, and other tools when merging a
-  pull request or branch. `into` must be in the first line.
-- `Revert "` or `Reapply "`, as created by `git revert`.
-- `fixup! `, `squash! `, or `amend! `, as created by `git commit --fixup` and `git commit --squash`.
-
-A message is also ignored if it only consists of a [semantic version](https://semver.org/), with an
-optional `v` prefix, like `1.2.3` or `v1.2.3-rc.1`, as created by `npm version`.
-
-Unlike commitlint, CoCoCheck does not ignore messages like `Revert the last change` or
-`revert: Remove a feature`, because they are written by hand, not created by Git.
-
-To ignore further commits, add [regular expressions](https://docs.rs/regex/latest/regex/#syntax) to
-`ignores`. The expressions are matched against the whole message, without trailing whitespace, and
-a message is ignored if any part of it matches one of them. `^` and `$` match at the start and end
-of the message, so `^Initial commit$` only ignores messages that consist of this single line. To
-make `^` and `$` match at the start and end of every line instead, add the `(?m)` flag:
-
-```yaml
-ignores:
-  # Messages whose header starts with "WIP".
-  - '^WIP\b'
-  # Messages with a line that only contains "[skip checks]".
-  - '(?m)^\[skip checks\]$'
-```
-
-To check the commits that are ignored by default, set `default_ignores` to `false`. The expressions
-in `ignores` still apply.
-
-Merge commits, which have more than one parent, are also ignored regardless of their message, so
-that a merge commit with a custom message, for example from `git merge -m`, does not fail the
-checks. To check their messages, set `ignore_merge_commits` to `false`; merge commits whose message
-matches one of the patterns above are still ignored. In the [`commit-msg` hook](#commit-msg-hook),
-the commit does not exist yet, so `ignore_merge_commits` does not apply, but the default message
-of `git merge` is ignored by `default_ignores`.
-
-Commits by bots like Dependabot or Renovate often have messages that a project cannot easily
-change. To ignore commits by their author, add
-[regular expressions](https://docs.rs/regex/latest/regex/#syntax) to `ignore_authors`. They are
-matched against the author as `Name <email>`, and a commit is ignored if any part of its author
-matches one of them:
-
-```yaml
-ignore_authors:
-  - '^dependabot\[bot\] '
-  - '^renovate\[bot\] '
-```
-
-In the [`commit-msg` hook](#commit-msg-hook), the commit does not exist yet, so CoCoCheck determines
-its author with `git var GIT_AUTHOR_IDENT`. Like Git, this respects the `GIT_AUTHOR_NAME` and
-`GIT_AUTHOR_EMAIL` environment variables and the `author.*` and `user.*` settings. `git commit`
-passes the author to its hooks in these variables, so the `--author` option and the author of an
-amended commit are also respected.
-
-| Setting                | Description                                               | Default |
-|------------------------|-----------------------------------------------------------|---------|
-| `default_ignores`      | Whether the messages listed above are ignored.            | `true`  |
-| `ignore_merge_commits` | Whether commits with more than one parent are ignored.    | `true`  |
-| `ignores`              | Regular expressions for further messages to ignore.       | `[]`    |
-| `ignore_authors`       | Regular expressions for the authors of commits to ignore. | `[]`    |
-
-### Forbidden commits
-
-Some commits are not meant to be merged, for example fixup commits, which are usually squashed
-before merging, or commits that are marked as work in progress. To reject them, add
-[regular expressions](https://docs.rs/regex/latest/regex/#syntax) to `forbidden`. They are matched
-like the expressions in [`ignores`](#ignored-commits), but before them, so that a forbidden message
-also fails if it is ignored, like the fixup commits that are ignored by default. A message that
-matches one of them fails with a violation that marks the match, and no rules are applied to it:
-
-```yaml
-forbidden:
-  # Commits created by `git commit --fixup` and `git commit --squash`.
-  - '^(amend|fixup|squash)! '
-  # Commits with "WIP" in any case as a word in the message.
-  - '(?i)\bwip\b'
-```
-
-```text
-Commit 2d2ab0e7ad0b4dbb08ab3e7b0b5c2a1fd5e5e0ea failed:
-
-error: Message matches the forbidden pattern '^(amend|fixup|squash)! '.
-  |
-1 | fixup! feat: Add a feature
-  | ^^^^^^^
-```
-
-The forbidden patterns also apply to the [`commit-msg` hook](#commit-msg-hook), so forbidding
-fixup commits prevents creating them. To forbid them only in CI, keep them in a separate
-configuration file that is passed with `--config` in CI.
-
-| Setting     | Description                                        | Default |
-|-------------|----------------------------------------------------|---------|
-| `forbidden` | Regular expressions for messages that always fail. | `[]`    |
-
-### Parser
-
-The `parser` section controls how CoCoCheck splits a message into header, body, and footers.
-
-| Setting            | Description                                                        | Default          |
-|--------------------|--------------------------------------------------------------------|------------------|
-| `footer_detection` | Which paragraphs at the end of the message are treated as footers. | `last_paragraph` |
-
-`footer_detection` accepts the following values:
-
-- `last_paragraph`: Only the last paragraph can contain footers, and only if its first line is a
-  footer.
-- `trailing_paragraphs`: Every paragraph at the end of the message whose first line is a footer
-  contains footers. Use this if footers in your repository are sometimes separated by blank lines.
-
-A footer line consists of a token, followed by `: ` or ` #`, and a value, for example
-`Refs: #123`, `Fixes #42`, or `BREAKING CHANGE: The API has changed`. A token in brackets, like a
-link reference `[1]: https://example.org`, must be followed by `: `, so that a numbered list like
-`[1] #123` is not taken for footers.
-
-### Rules
-
-All rules are enabled by default. To disable a rule, set its `enabled` setting to `false`:
-
-```yaml
-rules:
-  body_line_length:
-    enabled: false
-```
-
-By default, a commit that violates a rule fails the checks. To report the violations of a rule
-without failing the checks, set its `severity` setting to `warning`:
-
-```yaml
-rules:
+    case: sentence
   header_length:
     severity: warning
-```
-
-Warnings are reported like errors, but a commit that only has warnings passes, and CoCoCheck still
-exits with status `0`.
-
-To keep warnings advisory in the [`commit-msg` hook](#commit-msg-hook), but enforce them in CI,
-pass `--deny-warnings` in CI. A commit with warnings then fails: It is reported as failed, with an
-outcome of `failed` in the [JSON output](#json-output), and CoCoCheck exits with status `1`. The
-violations are still reported as warnings.
-
-#### `allowed_scopes`
-
-Requires the scope to be one of a list of scopes. A header can name multiple scopes separated by
-commas, like `feat(cli, core): Add a feature`, and each of them must be allowed. A commit without a
-scope passes; use [`scope_presence`](#scope_presence) to require a scope. By default, the list is
-empty and any scope is allowed.
-
-| Setting    | Description                                                 | Default |
-|------------|-------------------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                                | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`.           | `error` |
-| `scopes`   | The permitted scopes. If it is empty, any scope is allowed. | `[]`    |
-
-#### `allowed_types`
-
-Requires the commit type to be one of a fixed list of types.
-
-| Setting    | Description                                                  | Default                                                                                              |
-|------------|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `enabled`  | Whether the rule is applied.                                 | `true`                                                                                               |
-| `severity` | Whether a violation is an `error` or a `warning`.            | `error`                                                                                              |
-| `types`    | The permitted types. A configured list replaces the default. | `build`, `chore`, `ci`, `deps`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test` |
-
-#### `blank_line_before_footer`
-
-Requires footers to be separated from the body by a blank line. The rule reports a footer line
-that appears inside the last paragraph of the body, after its first line, as in this message:
-
-```text
-feat: Add a new feature
-
-This is the body.
-Refs: #123
-```
-
-A paragraph that starts with a footer line is not reported, because it is a footer paragraph that
-is followed by another one, which is parsed as body with the default `footer_detection` setting.
-Use the `trailing_paragraphs` [footer detection](#parser) to parse it as footers. Lines in fenced
-code blocks, which start and end with ```` ``` ```` or `~~~`, are not reported either.
-
-To not report prose that looks like a footer, like the second line of
-`There are multiple\nimplementations: One for files and one for databases.`, a footer line is only
-reported if the line before it ends with `.`, `!`, or `?`, possibly followed by closing brackets or
-quotes, ends a code block, or is a footer line itself. A footer after a line without punctuation,
-like `This is the body\nRefs: #123`, is therefore not reported.
-
-| Setting    | Description                                       | Default |
-|------------|---------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                      | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
-
-#### `body_length`
-
-Limits the length of the body as a whole, or requires a body, for example to make sure that every
-commit explains why the change was made:
-
-```yaml
-rules:
-  body_length:
-    min_length: 1
-```
-
-Lengths are counted in Unicode characters, not bytes, and every line break counts as one character.
-The footers are not part of the body, so a message that only has a `Signed-off-by` footer has no
-body. The body is measured as parsed: trailing whitespace is removed from its lines, and multiple
-blank lines between paragraphs count as one. A message without a body has a length of `0`. Both
-limits are unset by default, so the rule passes every commit unless one of them is configured.
-
-| Setting      | Description                                                       | Default |
-|--------------|-------------------------------------------------------------------|---------|
-| `enabled`    | Whether the rule is applied.                                      | `true`  |
-| `severity`   | Whether a violation is an `error` or a `warning`.                 | `error` |
-| `max_length` | The maximum number of characters in the body, or `null` for none. | `null`  |
-| `min_length` | The minimum number of characters in the body, or `null` for none. | `null`  |
-|              | `1` requires a body.                                              |         |
-
-#### `body_line_length`
-
-Limits the length of each line in the body. Lengths are counted in Unicode characters, not bytes.
-
-Long URLs cannot be wrapped, so by default lines that contain a URL starting with `http://` or
-`https://` are not checked, as in commitlint. The footers are not part of the body; their lines are
-checked by [`footer_line_length`](#footer_line_length).
-
-| Setting       | Description                                       | Default |
-|---------------|---------------------------------------------------|---------|
-| `enabled`     | Whether the rule is applied.                      | `true`  |
-| `severity`    | Whether a violation is an `error` or a `warning`. | `error` |
-| `max_length`  | The maximum number of characters per line.        | `72`    |
-| `ignore_urls` | Whether lines that contain a URL are skipped.     | `true`  |
-
-#### `breaking_change`
-
-The Conventional Commits specification allows marking a breaking change with a `!` before the `:`
-in the header, with a `BREAKING CHANGE` or `BREAKING-CHANGE` footer, or with both. This rule
-requires a consistent style. By default, a footer requires a `!`, so that breaking changes are
-visible in one-line logs. To also require a footer that describes the change if the header has a
-`!`:
-
-```yaml
-rules:
-  breaking_change:
-    footer_required: true
-```
-
-Like the other footers, a `BREAKING CHANGE` footer is only recognized after a blank line, at the end
-of the message, as described for the [parser](#parser). To allow a footer without a `!`, set
-`marker_required` to `false`.
-
-| Setting           | Description                                                      | Default |
-|-------------------|------------------------------------------------------------------|---------|
-| `enabled`         | Whether the rule is applied.                                     | `true`  |
-| `severity`        | Whether a violation is an `error` or a `warning`.                | `error` |
-| `footer_required` | Whether a `!` in the header requires a `BREAKING CHANGE` footer. | `false` |
-| `marker_required` | Whether a `BREAKING CHANGE` footer requires a `!` in the header. | `true`  |
-
-#### `description_case`
-
-Requires the description in the header to start with a lowercase or an uppercase letter. Only the
-first character is checked, and a description that does not start with a letter, like
-`` `--from` is exclusive ``, always passes. By default, any case is allowed.
-
-`case` accepts the following values:
-
-- `lower`: The description must start with a lowercase letter, like `feat: add a feature`.
-- `sentence`: The description must start with an uppercase letter, like `feat: Add a feature`.
-- `any`: The description can start with any letter.
-
-| Setting    | Description                                       | Default |
-|------------|---------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                      | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
-| `case`     | The required case of the first letter.            | `any`   |
-
-#### `footer_length`
-
-Limits the length of all footers together, like commitlint's `footer-max-length`. They are measured
-like the body by [`body_length`](#body_length): lengths are counted in Unicode characters, every
-line break counts as one character, and multiple blank lines between footer paragraphs count as
-one. The limit is unset by default, so the rule passes every commit unless it is configured.
-
-| Setting      | Description                                                          | Default |
-|--------------|----------------------------------------------------------------------|---------|
-| `enabled`    | Whether the rule is applied.                                         | `true`  |
-| `severity`   | Whether a violation is an `error` or a `warning`.                    | `error` |
-| `max_length` | The maximum number of characters of all footers, or `null` for none. | `null`  |
-
-#### `footer_line_length`
-
-Limits the length of each line of the footers, like commitlint's `footer-max-line-length`. Lengths
-are counted in Unicode characters, not bytes. Like in [`body_line_length`](#body_line_length),
-lines that contain a URL are not checked by default, because footers like `Refs: https://…` cannot
-be wrapped. The limit is unset by default, so the rule passes every commit unless it is configured:
-
-```yaml
-rules:
-  footer_line_length:
-    max_length: 72
-```
-
-| Setting       | Description                                                    | Default |
-|---------------|----------------------------------------------------------------|---------|
-| `enabled`     | Whether the rule is applied.                                   | `true`  |
-| `severity`    | Whether a violation is an `error` or a `warning`.              | `error` |
-| `max_length`  | The maximum number of characters per line, or `null` for none. | `null`  |
-| `ignore_urls` | Whether lines that contain a URL are skipped.                  | `true`  |
-
-#### `header_length`
-
-Limits the length of the header line. Lengths are counted in Unicode characters, not bytes.
-
-| Setting      | Description                                       | Default |
-|--------------|---------------------------------------------------|---------|
-| `enabled`    | Whether the rule is applied.                      | `true`  |
-| `severity`   | Whether a violation is an `error` or a `warning`. | `error` |
-| `max_length` | The maximum number of characters in the header.   | `72`    |
-
-#### `no_description_terminal_punctuation`
-
-Forbids the description in the header from ending with one of the configured characters. By
-default, these are a period, an exclamation mark, and a question mark. Every character of
-`characters` is forbidden, for example, to also forbid a comma, a semicolon, and a colon:
-
-```yaml
-rules:
-  no_description_terminal_punctuation:
-    characters: ".,;:!?"
-```
-
-As the description is the end of the header, this rule also limits how the header ends, like
-commitlint's `header-full-stop` and `subject-full-stop` rules.
-
-| Setting      | Description                                       | Default |
-|--------------|---------------------------------------------------|---------|
-| `enabled`    | Whether the rule is applied.                      | `true`  |
-| `severity`   | Whether a violation is an `error` or a `warning`. | `error` |
-| `characters` | The characters the description must not end with. | `.!?`   |
-
-#### `no_trailing_whitespace`
-
-Forbids spaces, tabs, and other whitespace at the end of any line of the message, in the header,
-the body, and the footers. Lines that only contain whitespace are reported as well. Each violation
-marks the trailing whitespace.
-
-With Git's default cleanup, trailing whitespace is removed before a commit is created, and
-CoCoCheck removes it the same way for a message checked with
-[`--message-file`](#commit-msg-hook). The rule therefore mainly reports commits in the history, or
-messages created with `git commit --cleanup=verbatim`.
-
-| Setting    | Description                                       | Default |
-|------------|---------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                      | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
-
-#### `required_footers`
-
-Requires every commit to have a footer with each of the configured tokens, for example a
-`Signed-off-by` footer for the [Developer Certificate of Origin](https://developercertificate.org/):
-
-```yaml
-rules:
   required_footers:
     tokens: [Signed-off-by]
 ```
 
-Tokens are compared case-insensitively, except for `BREAKING CHANGE` and `BREAKING-CHANGE`, which
-must be uppercase. A footer line in the body, for example because it is not separated from the body
-by a blank line, does not count.
+To see the effective configuration, including the defaults of all omitted settings, run
+`cococheck --print-config`. The full reference is in the [`docs`](docs) directory:
 
-| Setting    | Description                                       | Default |
-|------------|---------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                      | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
-| `tokens`   | The tokens of the footers that are required.      | `[]`    |
-
-#### `scope_case`
-
-Requires the scope to be lowercase, so that `feat(Core): Add a feature` is reported. A commit
-without a scope passes.
-
-`case` accepts the following values:
-
-- `lower`: The scope must not contain uppercase letters.
-- `any`: The scope can contain letters of any case.
-
-| Setting    | Description                                       | Default |
-|------------|---------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                      | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
-| `case`     | The required case of the scope.                   | `lower` |
-
-#### `scope_presence`
-
-Requires every commit to have a scope, like `feat(core): Add a feature`, or forbids scopes.
-
-`scope` accepts the following values:
-
-- `optional`: A commit can have a scope, but does not have to.
-- `required`: A commit must have a scope.
-- `forbidden`: A commit must not have a scope.
-
-| Setting    | Description                                       | Default    |
-|------------|---------------------------------------------------|------------|
-| `enabled`  | Whether the rule is applied.                      | `true`     |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error`    |
-| `scope`    | Whether a scope is required, forbidden, or not.   | `optional` |
-
-#### `type_case`
-
-Requires the commit type to be lowercase, so that `Feat: Add a feature` is reported.
-
-| Setting    | Description                                       | Default |
-|------------|---------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                      | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
+- [Configuration](docs/configuration.md): The configuration file, ignored and forbidden commits, and
+  the parser.
+- [Rules](docs/rules.md): All rules, their settings, and how to change their severity.
 
 ## Project layout
 
@@ -822,6 +310,8 @@ The repository is a Cargo workspace with two crates:
 - [`cococheck-core`](cococheck-core) contains the commit message parser, the configuration, and the
   rules.
 - [`cococheck-cli`](cococheck-cli) contains the `cococheck` package with the command-line tool.
+
+The [`docs`](docs) directory contains the reference of the configuration and the rules.
 
 ## Contributing
 

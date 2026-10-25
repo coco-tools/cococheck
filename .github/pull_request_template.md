@@ -6,4 +6,5 @@
       specification and are signed off (`git commit -s`), see the
       [contributing guidelines](https://github.com/mnonnenmacher/cococheck#contributing).
 - [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` pass.
-- [ ] The README is updated if the change affects the usage or the configuration.
+- [ ] The README or the documentation in `docs` is updated if the change affects the usage, the
+      configuration, or the rules.
