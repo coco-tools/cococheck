@@ -1,5 +1,5 @@
 [package]
-name = "cococheck-cli"
+name = "cococheck"
 version.workspace = true
 description = "A fast checker for Conventional Commits messages, distributed as a single binary"
 edition.workspace = true
