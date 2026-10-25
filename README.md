@@ -275,6 +275,11 @@ rules:
   blank_line_before_footer:
     enabled: true
     severity: error
+  body_length:
+    enabled: true
+    severity: error
+    max_length: null
+    min_length: null
   body_line_length:
     enabled: true
     severity: error
@@ -496,6 +501,31 @@ like `This is the body\nRefs: #123`, is therefore not reported.
 |------------|---------------------------------------------------|---------|
 | `enabled`  | Whether the rule is applied.                      | `true`  |
 | `severity` | Whether a violation is an `error` or a `warning`. | `error` |
+
+#### `body_length`
+
+Limits the length of the body as a whole, or requires a body, for example to make sure that every
+commit explains why the change was made:
+
+```yaml
+rules:
+  body_length:
+    min_length: 1
+```
+
+Lengths are counted in Unicode characters, not bytes, and every line break counts as one character.
+The footers are not part of the body, so a message that only has a `Signed-off-by` footer has no
+body. The body is measured as parsed: trailing whitespace is removed from its lines, and multiple
+blank lines between paragraphs count as one. A message without a body has a length of `0`. Both
+limits are unset by default, so the rule passes every commit unless one of them is configured.
+
+| Setting      | Description                                                       | Default |
+|--------------|-------------------------------------------------------------------|---------|
+| `enabled`    | Whether the rule is applied.                                      | `true`  |
+| `severity`   | Whether a violation is an `error` or a `warning`.                 | `error` |
+| `max_length` | The maximum number of characters in the body, or `null` for none. | `null`  |
+| `min_length` | The minimum number of characters in the body, or `null` for none. | `null`  |
+|              | `1` requires a body.                                              |         |
 
 #### `body_line_length`
 
