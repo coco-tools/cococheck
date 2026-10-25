@@ -1,7 +1,7 @@
 use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
 use anyhow::Context;
 use clap::{Parser, ValueEnum};
-use cococheck_core::config::{Config, ConfigError, load_config};
+use cococheck_core::config::{Config, ConfigError, find_config, load_config};
 use cococheck_core::git::{get_commits, get_commits_for_revisions, message_cleanup};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
 use cococheck_core::rules::{RuleResult, RuleSet, Severity};
@@ -19,7 +19,8 @@ struct Cli {
     #[arg(short, long, default_value = ".")]
     input: PathBuf,
 
-    /// Path to the config file (default: cococheck.yml in the repository, if it exists)
+    /// Path to the config file (default: cococheck.yml or .cococheck.yml in the repository, if it
+    /// exists, or the same with the .yaml extension)
     #[arg(short, long)]
     config: Option<PathBuf>,
 
@@ -544,7 +545,8 @@ fn parse_error_span(error: &ParseError) -> Option<Range<usize>> {
 
 /// Load the config file at `config_path`, or from the repository at `repo_path` if no path is
 /// given. Use the default configuration if no path is given and the repository does not contain a
-/// config file. An explicitly given config file that does not exist is an error.
+/// config file. An explicitly given config file that does not exist is an error, and so are
+/// multiple config files in the repository.
 fn load_config_or_default(
     repo_path: &Path,
     config_path: Option<&Path>,
@@ -555,26 +557,20 @@ fn load_config_or_default(
         return Ok(config);
     }
 
-    let config_path = repo_path.join("cococheck.yml");
-    match load_config(&config_path) {
-        Ok(config) => {
-            info!(
-                "Using config file: {}",
-                config_path
-                    .strip_prefix(repo_path)
-                    .unwrap_or(&config_path)
-                    .display()
-            );
-            Ok(config)
-        }
-        Err(ConfigError::Io { ref source, .. })
-            if source.kind() == std::io::ErrorKind::NotFound =>
-        {
-            info!("No config file found, using default configuration.");
-            Ok(Config::default())
-        }
-        Err(e) => Err(e),
-    }
+    let Some(config_path) = find_config(repo_path)? else {
+        info!("No config file found, using default configuration.");
+        return Ok(Config::default());
+    };
+
+    let config = load_config(&config_path)?;
+    info!(
+        "Using config file: {}",
+        config_path
+            .strip_prefix(repo_path)
+            .unwrap_or(&config_path)
+            .display()
+    );
+    Ok(config)
 }
 
 #[cfg(test)]

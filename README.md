@@ -88,9 +88,9 @@ CoCoCheck finished checking 3 commits.
 | `-h`, `--help`          | Print help.                                                  |             |
 | `-V`, `--version`       | Print the version.                                           |             |
 
-Without `--config`, CoCoCheck reads `cococheck.yml` from the repository given by `--input`, and
-uses the default configuration if that file does not exist. A file given with `--config` must exist;
-otherwise CoCoCheck fails with an error.
+Without `--config`, CoCoCheck reads the [configuration file](#configuration) from the repository
+given by `--input`, and uses the default configuration if there is none. A file given with
+`--config` must exist; otherwise CoCoCheck fails with an error.
 
 ### Selecting commits
 
@@ -144,7 +144,7 @@ following content and make it executable with `chmod +x .git/hooks/commit-msg`:
 exec cococheck --message-file "$1"
 ```
 
-Git runs the hook in the root of the working tree, so CoCoCheck reads the `cococheck.yml` of the
+Git runs the hook in the root of the working tree, so CoCoCheck reads the configuration file of the
 repository. A message is not checked if it is [ignored](#ignored-commits), for example the message
 of a merge commit. To create a single commit without running the hook, use
 `git commit --no-verify`.
@@ -241,10 +241,12 @@ suitable for use in CI pipelines and Git hooks.
 
 ## Configuration
 
-CoCoCheck reads its configuration from a file named `cococheck.yml` in the root of the repository
-being checked. If the file does not exist, the defaults described below apply. Every section and
-setting is optional; omitted values keep their defaults. Unknown keys are rejected, so a typo in a
-rule name causes an error instead of being silently ignored.
+CoCoCheck reads its configuration from a file in the root of the repository being checked, named
+`cococheck.yml`, or `.cococheck.yml` to keep it hidden. The `.yaml` extension works as well. If
+there is no such file, the defaults described below apply. If there is more than one, CoCoCheck
+fails with an error instead of picking one. Every section and setting is optional; omitted values
+keep their defaults. Unknown keys are rejected, so a typo in a rule name causes an error instead of
+being silently ignored.
 
 The following file sets every option to its default value:
 
