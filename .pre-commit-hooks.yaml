@@ -1,0 +1,6 @@
+- id: cococheck
+  name: cococheck
+  description: Check the commit message against the Conventional Commits specification.
+  entry: cococheck --message-file
+  language: rust
+  stages: [commit-msg]
