@@ -86,6 +86,9 @@ pub use header_length::HeaderLength;
 mod no_description_terminal_punctuation;
 pub use no_description_terminal_punctuation::NoDescriptionTerminalPunctuation;
 
+mod no_trailing_whitespace;
+pub use no_trailing_whitespace::NoTrailingWhitespace;
+
 mod required_footers;
 pub use required_footers::RequiredFooters;
 

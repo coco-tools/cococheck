@@ -6,6 +6,9 @@ use std::ops::Range;
 /// the header are also positions in the full message.
 #[derive(Debug, PartialEq)]
 pub struct ConventionalCommit {
+    /// The full commit message, unchanged, so that rules can check what the parser normalizes,
+    /// like trailing whitespace.
+    pub message: String,
     pub header: String,
     pub commit_type: String,
     pub scope: Option<String>,
@@ -239,6 +242,7 @@ pub fn parse_conventional_commit(
     }
 
     Ok(ConventionalCommit {
+        message: message.to_string(),
         header: header_line.to_string(),
         commit_type: caps["type"].to_string(),
         scope: caps.name("scope").map(|m| m.as_str().to_string()),
@@ -388,6 +392,7 @@ mod tests {
     fn parses_header_without_scope() {
         let message = "feat: add new feature";
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "feat: add new feature".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
@@ -407,6 +412,7 @@ mod tests {
     fn parses_header_with_scope() {
         let message = "fix(core): correct minor issue";
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "fix(core): correct minor issue".to_string(),
             commit_type: "fix".to_string(),
             scope: Some("core".to_string()),
@@ -426,6 +432,7 @@ mod tests {
     fn parses_header_with_breaking_change() {
         let message = "feat!: introduce breaking change";
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "feat!: introduce breaking change".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
@@ -458,6 +465,7 @@ mod tests {
         "#,
         );
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "fix: resolve issue".to_string(),
             commit_type: "fix".to_string(),
             scope: None,
@@ -498,6 +506,7 @@ mod tests {
         );
 
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "feat: add new feature".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
@@ -533,6 +542,7 @@ mod tests {
         );
 
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "feat: add new feature".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
@@ -571,6 +581,7 @@ mod tests {
         );
 
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "feat: add new feature".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
@@ -862,6 +873,7 @@ mod tests {
         );
 
         let expected = ConventionalCommit {
+            message: message.to_string(),
             header: "feat: add new feature".to_string(),
             commit_type: "feat".to_string(),
             scope: None,
