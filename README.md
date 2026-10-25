@@ -170,6 +170,48 @@ repository. A message is not checked if it is [ignored](docs/configuration.md#ig
 example the message of a merge commit. To create a single commit without running the hook, use
 `git commit --no-verify`.
 
+#### Hook managers
+
+Instead of writing the hook by hand, it can be set up with a hook manager. This shares the hook
+with everyone who works on the repository.
+
+With [pre-commit](https://pre-commit.com/), add CoCoCheck to the `.pre-commit-config.yaml`, and set
+`rev` to the commit ID of the CoCoCheck version to use:
+
+```yaml
+default_install_hook_types: [pre-commit, commit-msg]
+repos:
+  - repo: https://github.com/coco-tools/cococheck
+    rev: <commit ID>
+    hooks:
+      - id: cococheck
+```
+
+Then install the hooks with `pre-commit install`. The `default_install_hook_types` setting makes
+it install the `commit-msg` hook, which pre-commit does not install by default. Without it, run
+`pre-commit install --hook-type commit-msg`. The hook builds CoCoCheck from source with Cargo
+when it is run for the first time, so it requires a [Rust toolchain](#installation).
+
+With [Lefthook](https://lefthook.dev/), add CoCoCheck to the `lefthook.yml`, and install the hooks
+with `lefthook install`:
+
+```yaml
+commit-msg:
+  commands:
+    cococheck:
+      run: cococheck --message-file {1}
+```
+
+With [husky](https://typicode.github.io/husky/), create the file `.husky/commit-msg` with the
+following content:
+
+```shell
+cococheck --message-file "$1"
+```
+
+Lefthook and husky run the `cococheck` binary from the `PATH`, so it must be
+[installed](#installation) first.
+
 ### Output and exit status
 
 The report of failed commits and the summary are written to standard output. Log messages enabled
