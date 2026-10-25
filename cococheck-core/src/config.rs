@@ -473,7 +473,7 @@ mod tests {
         rules:
           allowed_types:
             enabled: false
-            allowed_types: [feat, fix]
+            types: [feat, fix]
           no_description_terminal_punctuation:
             enabled: false
         "#;
@@ -484,7 +484,7 @@ mod tests {
                 enabled: false,
                 severity: Severity::Error,
                 rule: AllowedTypes {
-                    allowed_types: vec!["feat".to_string(), "fix".to_string()]
+                    types: vec!["feat".to_string(), "fix".to_string()]
                 },
             }
         );
