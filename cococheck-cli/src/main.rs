@@ -3,11 +3,11 @@ use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use cococheck_core::config::{Config, ConfigError, find_config, load_config};
 use cococheck_core::git::{
-    find_latest_tag, get_commits, get_commits_for_revisions, message_cleanup,
+    author_ident, find_latest_tag, get_commits, get_commits_for_revisions, message_cleanup,
 };
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
 use cococheck_core::rules::{RuleResult, RuleSet, Severity};
-use log::{LevelFilter, debug, info};
+use log::{LevelFilter, debug, info, warn};
 use serde::Serialize;
 use std::io::{IsTerminal, Read, Write};
 use std::ops::Range;
@@ -165,7 +165,7 @@ fn run(args: &Cli) -> anyhow::Result<bool> {
     info!("Checking Git repository at: {}", args.input.display());
 
     let messages = match &args.message_file {
-        Some(path) => vec![read_message_file(&args.input, path)?],
+        Some(path) => vec![read_message_file(&args.input, path, &config)?],
         None => collect_commits(args)?,
     };
 
@@ -222,6 +222,8 @@ struct Message {
     text: String,
     /// Whether the message is the message of a merge commit.
     is_merge: bool,
+    /// The author of the commit as `Name <email>`, or `None` if it is unknown.
+    author: Option<String>,
 }
 
 /// Collect the messages of the commits selected by `args`, ordered from oldest to newest.
@@ -270,6 +272,7 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
             id: Some(commit.id),
             text: commit.message,
             is_merge: commit.is_merge,
+            author: Some(commit.author),
         })
         .collect();
 
@@ -277,8 +280,10 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
 }
 
 /// Read the commit message from the file at `path`, or from standard input if the path is `-`, and
-/// clean it up like Git does, as configured for the repository at `repo_path`.
-fn read_message_file(repo_path: &Path, path: &Path) -> anyhow::Result<Message> {
+/// clean it up like Git does, as configured for the repository at `repo_path`. The commit does not
+/// exist yet, so if the `config` ignores authors, determine the author like Git does for a new
+/// commit.
+fn read_message_file(repo_path: &Path, path: &Path, config: &Config) -> anyhow::Result<Message> {
     let mut bytes = Vec::new();
     if path == Path::new("-") {
         std::io::stdin()
@@ -292,12 +297,22 @@ fn read_message_file(repo_path: &Path, path: &Path) -> anyhow::Result<Message> {
     let cleanup = message_cleanup(repo_path);
     debug!("Cleaning up the commit message with {:?}.", cleanup);
 
+    // Running Git is only necessary if the author is needed.
+    let author = if config.ignore_authors.is_empty() {
+        None
+    } else {
+        author_ident(repo_path)
+            .inspect_err(|e| warn!("{e}, so the commit cannot be ignored by its author"))
+            .ok()
+    };
+
     Ok(Message {
         id: None,
         name: "Commit message".to_string(),
         text: cleanup.clean(&String::from_utf8_lossy(&bytes)),
         // The commit does not exist yet, so its parents are unknown.
         is_merge: false,
+        author,
     })
 }
 
@@ -305,7 +320,8 @@ fn read_message_file(repo_path: &Path, path: &Path) -> anyhow::Result<Message> {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum Outcome {
-    /// The commit was not checked, because its message matches an ignore pattern.
+    /// The commit was not checked, because its message or author matches an ignore pattern, or it
+    /// is an ignored merge commit.
     Ignored,
 
     /// The commit passed all rules.
@@ -381,8 +397,10 @@ impl<'a> Checker<'a> {
             };
         }
 
+        let is_ignored_author = |author: &str| self.config.is_ignored_author(author);
         if self.config.is_ignored(&message.text)
             || (self.config.ignore_merge_commits && message.is_merge)
+            || message.author.as_deref().is_some_and(is_ignored_author)
         {
             info!("{} is ignored.", message.name);
             return report(Outcome::Ignored, None, vec![]);
@@ -765,7 +783,36 @@ mod tests {
             name: "Commit".to_string(),
             text: text.to_string(),
             is_merge: false,
+            author: None,
         }
+    }
+
+    #[test]
+    fn ignores_commits_by_author() {
+        let config =
+            cococheck_core::config::parse_config(r"ignore_authors: ['^renovate\[bot\] ']").unwrap();
+        let checker = Checker::new(&config, false);
+        let by = |author: &str| Message {
+            author: Some(author.to_string()),
+            ..message(Some("a1"), "Update dependency")
+        };
+
+        assert_eq!(
+            checker
+                .check(&by("renovate[bot] <bot@renovateapp.com>"))
+                .outcome,
+            Outcome::Ignored
+        );
+        assert_eq!(
+            checker.check(&by("Jane Doe <jane@example.org>")).outcome,
+            Outcome::Failed
+        );
+        assert_eq!(
+            checker
+                .check(&message(Some("a1"), "Update dependency"))
+                .outcome,
+            Outcome::Failed
+        );
     }
 
     #[test]

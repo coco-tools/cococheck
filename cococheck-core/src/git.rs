@@ -3,6 +3,7 @@ use git2::{
     Commit, DescribeFormatOptions, DescribeOptions, ErrorClass, ErrorCode, Oid, Repository, Sort,
 };
 use std::path::Path;
+use std::process::Command;
 
 #[derive(Debug, PartialEq)]
 pub struct CommitInfo {
@@ -10,6 +11,8 @@ pub struct CommitInfo {
     pub message: String,
     /// Whether the commit is a merge commit, which has more than one parent.
     pub is_merge: bool,
+    /// The author of the commit as `Name <email>`.
+    pub author: String,
 }
 
 #[derive(Debug)]
@@ -59,6 +62,9 @@ pub enum GitError {
 
     #[error("failed to read commits: {}", .0.message())]
     Git(git2::Error),
+
+    #[error("failed to determine the author with 'git var GIT_AUTHOR_IDENT': {0}")]
+    AuthorIdent(String),
 }
 
 /// Describe the revision with the given `name` in error messages: `revision` for a single revision,
@@ -151,6 +157,34 @@ pub fn get_commits_for_revisions(
         to: oid.to_string(),
         commits: vec![commit_info(&repo.find_commit(oid)?)],
     })
+}
+
+/// Return the author that Git records for a new commit in the repository at `repo_path` as
+/// `Name <email>`. Like Git, respect the `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` environment
+/// variables, and the `author.*` and `user.*` settings, by running `git var GIT_AUTHOR_IDENT`, as
+/// libgit2 does not implement all of Git's rules for determining the identity.
+pub fn author_ident(repo_path: &Path) -> Result<String, GitError> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_path)
+        .args(["var", "GIT_AUTHOR_IDENT"])
+        .output()
+        .map_err(|e| GitError::AuthorIdent(e.to_string()))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(GitError::AuthorIdent(stderr.trim().to_string()));
+    }
+
+    parse_ident(&String::from_utf8_lossy(&output.stdout))
+        .ok_or_else(|| GitError::AuthorIdent("unexpected output".to_string()))
+}
+
+/// Return the `Name <email>` part of a Git identity like `Name <email> 1700000000 +0100`.
+fn parse_ident(ident: &str) -> Option<String> {
+    let mut parts = ident.trim_end().rsplitn(3, ' ');
+    let (_offset, _timestamp) = (parts.next()?, parts.next()?);
+    parts.next().map(str::to_string)
 }
 
 /// Return how Git cleans up commit messages edited in the repository at `repo_path`, as configured
@@ -254,6 +288,11 @@ fn commit_info(commit: &Commit) -> CommitInfo {
         id: commit.id().to_string(),
         message: String::from_utf8_lossy(commit.message_bytes()).into_owned(),
         is_merge: commit.parent_count() > 1,
+        author: format!(
+            "{} <{}>",
+            String::from_utf8_lossy(commit.author().name_bytes()),
+            String::from_utf8_lossy(commit.author().email_bytes())
+        ),
     }
 }
 
@@ -573,7 +612,35 @@ mod tests {
                 id: oids[0].to_string(),
                 message: "first".to_string(),
                 is_merge: false,
+                author: "Test <test@example.org>".to_string(),
             }]
+        );
+    }
+
+    #[test]
+    fn parses_the_name_and_email_of_an_ident() {
+        assert_eq!(
+            parse_ident("Jane Doe <jane@example.org> 1700000000 +0100\n"),
+            Some("Jane Doe <jane@example.org>".to_string())
+        );
+        assert_eq!(parse_ident("invalid"), None);
+    }
+
+    #[test]
+    fn reads_the_author_ident_from_the_repository_config() {
+        let (dir, repo) = init_repo();
+        let mut config = repo.config().unwrap();
+        config.set_str("user.name", "Jane Doe").unwrap();
+        config.set_str("user.email", "jane@example.org").unwrap();
+        // The `author.*` settings take precedence over the `user.*` settings.
+        config.set_str("author.name", "Author").unwrap();
+        config
+            .set_str("author.email", "author@example.org")
+            .unwrap();
+
+        assert_eq!(
+            author_ident(dir.path()).unwrap(),
+            "Author <author@example.org>"
         );
     }
 
