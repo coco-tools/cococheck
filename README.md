@@ -199,6 +199,7 @@ CoCoCheck then writes a single JSON document to standard output instead of the t
       "id": "2819a1a133fa4e1fcefb08f90c1bb2bb8f675c93",
       "header": "fix(api): Handle errors.",
       "outcome": "failed",
+      "forbidden_pattern": null,
       "parse_error": null,
       "rules": [
         {
@@ -220,19 +221,20 @@ CoCoCheck then writes a single JSON document to standard output instead of the t
 
 The example shows only one rule; the report lists every enabled rule.
 
-| Field                   | Description                                                                                                         |
-|-------------------------|---------------------------------------------------------------------------------------------------------------------|
-| `commits`               | The checked commits, ordered from oldest to newest, including the ignored ones.                                     |
-| `commits[].id`          | The commit ID, or `null` for a message checked with `--message-file`.                                               |
-| `commits[].header`      | The first line of the commit message.                                                                               |
-| `commits[].outcome`     | `passed`, `passed_with_warnings`, `failed`, or `ignored`.                                                           |
-| `commits[].parse_error` | Why the message could not be parsed, with a `message` and a `span`, or `null`. No rules are applied if it is set.   |
-| `commits[].rules`       | The results of all enabled rules, or an empty list if the commit is ignored or could not be parsed.                 |
-| `rules[].rule`          | The name of the rule, as used in the configuration.                                                                 |
-| `rules[].severity`      | The configured severity of the rule, `error` or `warning`.                                                          |
-| `rules[].violations`    | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.               |
-| `span`                  | The byte range `start..end` in the full commit message that a violation refers to, or `null` if it has no location. |
-| `summary`               | The number of `checked` and `ignored` commits, and of the commits that `passed_with_warnings` or `failed`.          |
+| Field                         | Description                                                                                                         |
+|-------------------------------|---------------------------------------------------------------------------------------------------------------------|
+| `commits`                     | The checked commits, ordered from oldest to newest, including the ignored ones.                                     |
+| `commits[].id`                | The commit ID, or `null` for a message checked with `--message-file`.                                               |
+| `commits[].header`            | The first line of the commit message.                                                                               |
+| `commits[].outcome`           | `passed`, `passed_with_warnings`, `failed`, or `ignored`.                                                           |
+| `commits[].forbidden_pattern` | Why the message matches a [forbidden pattern](#forbidden-commits), with a `message` and a `span`, or `null`.        |
+| `commits[].parse_error`       | Why the message could not be parsed, with a `message` and a `span`, or `null`. No rules are applied if it is set.   |
+| `commits[].rules`             | The results of all enabled rules, or an empty list if the commit is ignored or could not be parsed.                 |
+| `rules[].rule`                | The name of the rule, as used in the configuration.                                                                 |
+| `rules[].severity`            | The configured severity of the rule, `error` or `warning`.                                                          |
+| `rules[].violations`          | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.               |
+| `span`                        | The byte range `start..end` in the full commit message that a violation refers to, or `null` if it has no location. |
+| `summary`                     | The number of `checked` and `ignored` commits, and of the commits that `passed_with_warnings` or `failed`.          |
 
 The exit status is the same as for the text report.
 
@@ -253,6 +255,7 @@ being silently ignored.
 The following file sets every option to its default value:
 
 ```yaml
+forbidden: []
 default_ignores: true
 ignores: []
 
@@ -362,6 +365,40 @@ in `ignores` still apply.
 |-------------------|----------------------------------------------------------------------|---------|
 | `default_ignores` | Whether the messages that Git creates, as listed above, are ignored. | `true`  |
 | `ignores`         | Regular expressions for further messages to ignore.                  | `[]`    |
+
+### Forbidden commits
+
+Some commits are not meant to be merged, for example fixup commits, which are usually squashed
+before merging, or commits that are marked as work in progress. To reject them, add
+[regular expressions](https://docs.rs/regex/latest/regex/#syntax) to `forbidden`. They are matched
+like the expressions in [`ignores`](#ignored-commits), but before them, so that a forbidden message
+also fails if it is ignored, like the fixup commits that are ignored by default. A message that
+matches one of them fails with a violation that marks the match, and no rules are applied to it:
+
+```yaml
+forbidden:
+  # Commits created by `git commit --fixup` and `git commit --squash`.
+  - '^(amend|fixup|squash)! '
+  # Commits with "WIP" in any case as a word in the message.
+  - '(?i)\bwip\b'
+```
+
+```text
+Commit 2d2ab0e7ad0b4dbb08ab3e7b0b5c2a1fd5e5e0ea failed:
+
+error: Message matches the forbidden pattern '^(amend|fixup|squash)! '.
+  |
+1 | fixup! feat: Add a feature
+  | ^^^^^^^
+```
+
+The forbidden patterns also apply to the [`commit-msg` hook](#commit-msg-hook), so forbidding
+fixup commits prevents creating them. To forbid them only in CI, keep them in a separate
+configuration file that is passed with `--config` in CI.
+
+| Setting     | Description                                         | Default |
+|-------------|----------------------------------------------------|---------|
+| `forbidden` | Regular expressions for messages that always fail. | `[]`    |
 
 ### Parser
 

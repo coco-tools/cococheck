@@ -6,6 +6,7 @@ use crate::rules::{
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -31,6 +32,15 @@ static DEFAULT_IGNORES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    /// Regular expressions for messages that are not allowed, like the messages of fixup commits. A
+    /// message fails the checks if any part of it matches one of them, even if it is also ignored.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_forbidden_patterns",
+        serialize_with = "serialize_patterns"
+    )]
+    pub forbidden: Vec<Regex>,
+
     /// Whether the messages that Git creates, like merge and revert commits, are ignored.
     #[serde(default = "default_default_ignores")]
     pub default_ignores: bool,
@@ -39,7 +49,7 @@ pub struct Config {
     /// matches one of them.
     #[serde(
         default,
-        deserialize_with = "deserialize_patterns",
+        deserialize_with = "deserialize_ignore_patterns",
         serialize_with = "serialize_patterns"
     )]
     pub ignores: Vec<Regex>,
@@ -54,6 +64,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
+            forbidden: Vec::new(),
             default_ignores: default_default_ignores(),
             ignores: Vec::new(),
             parser: ParserConfig::default(),
@@ -62,7 +73,30 @@ impl Default for Config {
     }
 }
 
+/// The part of a commit message that matches a forbidden pattern.
+#[derive(Debug)]
+pub struct ForbiddenMatch<'a> {
+    /// The forbidden pattern.
+    pub pattern: &'a Regex,
+    /// The byte range of the match in the commit message.
+    pub span: Range<usize>,
+}
+
 impl Config {
+    /// Return the match of the first of the `forbidden` patterns that the commit `message` matches,
+    /// or `None` if it matches none of them. Like for [`Config::is_ignored`], trailing whitespace is
+    /// removed from the message before matching.
+    pub fn find_forbidden(&self, message: &str) -> Option<ForbiddenMatch<'_>> {
+        let message = message.trim_end();
+
+        self.forbidden.iter().find_map(|pattern| {
+            pattern.find(message).map(|m| ForbiddenMatch {
+                pattern,
+                span: m.range(),
+            })
+        })
+    }
+
     /// Return whether the commit `message` is ignored, because it matches one of the default ignore
     /// patterns, if they are enabled, or one of the configured `ignores`.
     pub fn is_ignored(&self, message: &str) -> bool {
@@ -94,9 +128,24 @@ fn default_default_ignores() -> bool {
     true
 }
 
-/// Deserialize a list of regular expressions, failing for an invalid one. A YAML null value is
-/// deserialized as an empty list.
-fn deserialize_patterns<'de, D>(deserializer: D) -> Result<Vec<Regex>, D::Error>
+fn deserialize_forbidden_patterns<'de, D>(deserializer: D) -> Result<Vec<Regex>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_patterns(deserializer, "forbidden")
+}
+
+fn deserialize_ignore_patterns<'de, D>(deserializer: D) -> Result<Vec<Regex>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_patterns(deserializer, "ignore")
+}
+
+/// Deserialize a list of regular expressions, failing for an invalid one, whose error message
+/// describes it as a pattern of the given `kind`. A YAML null value is deserialized as an empty
+/// list.
+fn deserialize_patterns<'de, D>(deserializer: D, kind: &str) -> Result<Vec<Regex>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -105,7 +154,7 @@ where
         .iter()
         .map(|pattern| {
             Regex::new(pattern).map_err(|e| {
-                serde::de::Error::custom(format!("invalid ignore pattern '{pattern}': {e}"))
+                serde::de::Error::custom(format!("invalid {kind} pattern '{pattern}': {e}"))
             })
         })
         .collect()
@@ -376,6 +425,57 @@ mod tests {
             .to_string();
         assert!(
             message.contains("invalid ignore pattern '(unclosed'"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn finds_the_first_matching_forbidden_pattern() {
+        let yaml = r#"
+        forbidden:
+          - '^(amend|fixup|squash)! '
+          - '\bWIP\b'
+        "#;
+        let config = parse_config(yaml).unwrap();
+
+        let found = config
+            .find_forbidden("fixup! feat: Add a WIP feature")
+            .unwrap();
+        assert_eq!(found.pattern.as_str(), "^(amend|fixup|squash)! ");
+        assert_eq!(found.span, 0..7);
+
+        let found = config.find_forbidden("feat: Add a WIP feature").unwrap();
+        assert_eq!(found.pattern.as_str(), "\\bWIP\\b");
+        assert_eq!(found.span, 12..15);
+
+        assert!(config.find_forbidden("feat: Add a feature").is_none());
+    }
+
+    #[test]
+    fn matches_forbidden_patterns_before_trailing_whitespace() {
+        let config = parse_config("forbidden: ['^WIP$']").unwrap();
+        assert!(config.find_forbidden("WIP\n").is_some());
+        assert!(config.find_forbidden("WIP\n\nBody.\n").is_none());
+    }
+
+    #[test]
+    fn forbids_nothing_by_default() {
+        let config = Config::default();
+        assert!(config.forbidden.is_empty());
+        assert!(
+            config
+                .find_forbidden("fixup! feat: Add a feature")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn fails_for_invalid_forbidden_pattern() {
+        let message = parse_config("forbidden: ['(unclosed']")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains("invalid forbidden pattern '(unclosed'"),
             "{message}"
         );
     }
@@ -764,6 +864,7 @@ mod tests {
         let yaml = Config::default().to_yaml().unwrap();
 
         for key in [
+            "forbidden: []",
             "default_ignores: true",
             "ignores: []",
             "footer_detection: last_paragraph",
@@ -778,6 +879,7 @@ mod tests {
     #[test]
     fn serialized_config_can_be_parsed_again() {
         let yaml = r#"
+        forbidden: ['^fixup! ']
         default_ignores: false
         ignores:
           - '^WIP\b'
@@ -810,6 +912,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(patterns(&parsed), patterns(&config));
+        assert_eq!(parsed.forbidden[0].as_str(), "^fixup! ");
         assert!(!parsed.default_ignores);
         assert_eq!(
             parsed.parser.footer_detection,
