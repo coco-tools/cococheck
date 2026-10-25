@@ -2,7 +2,9 @@ use annotate_snippets::{AnnotationKind, Group, Level, Renderer, Snippet};
 use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use cococheck_core::config::{Config, ConfigError, find_config, load_config};
-use cococheck_core::git::{get_commits, get_commits_for_revisions, message_cleanup};
+use cococheck_core::git::{
+    find_latest_tag, get_commits, get_commits_for_revisions, message_cleanup,
+};
 use cococheck_core::parser::{ParseError, parse_conventional_commit};
 use cococheck_core::rules::{RuleResult, RuleSet, Severity};
 use log::{LevelFilter, debug, info};
@@ -37,8 +39,17 @@ struct Cli {
     #[arg(long)]
     to: Option<String>,
 
+    /// Check only the commits after the latest tag that is reachable from the end commit, or all
+    /// commits if there is no such tag
+    #[arg(long, conflicts_with_all = ["revisions", "from"])]
+    from_latest_tag: bool,
+
     /// Check only the commit message in this file ("-" for stdin), e.g. in a commit-msg hook
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["revisions", "from", "to"])]
+    #[arg(
+        long,
+        value_name = "FILE",
+        conflicts_with_all = ["revisions", "from", "to", "from_latest_tag"]
+    )]
     message_file: Option<PathBuf>,
 
     /// The format of the report on standard output
@@ -147,13 +158,32 @@ struct Message {
 
 /// Collect the messages of the commits selected by `args`, ordered from oldest to newest.
 fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
-    let range = match &args.revisions {
-        Some(revisions) => get_commits_for_revisions(&args.input, revisions)?,
-        None => get_commits(&args.input, args.from.as_deref(), args.to.as_deref())?,
+    let to = args.to.as_deref().unwrap_or("HEAD");
+
+    let from = if args.from_latest_tag {
+        let tag = find_latest_tag(&args.input, args.to.as_deref())?;
+        match &tag {
+            Some(tag) => info!("Found latest tag {tag}."),
+            None => info!("No tag is reachable from {to}, checking all commits."),
+        }
+        tag
+    } else {
+        args.from.clone()
     };
 
-    let to = args.to.as_deref().unwrap_or("HEAD");
-    match (&args.revisions, &args.from, &range.from) {
+    let range = match &args.revisions {
+        Some(revisions) => get_commits_for_revisions(&args.input, revisions)?,
+        None => {
+            // Resolve a tag as a tag, even if a branch has the same name.
+            let from_revision = match (&from, args.from_latest_tag) {
+                (Some(tag), true) => Some(format!("refs/tags/{tag}")),
+                _ => from.clone(),
+            };
+            get_commits(&args.input, from_revision.as_deref(), args.to.as_deref())?
+        }
+    };
+
+    match (&args.revisions, &from, &range.from) {
         (Some(revisions), _, Some(from_id)) => {
             info!("Using commit range {revisions} ({from_id}..{})", range.to)
         }
@@ -722,6 +752,22 @@ mod tests {
                 "summary": { "checked": 4, "ignored": 1, "passed_with_warnings": 1, "failed": 2 }
             })
         );
+    }
+
+    #[test]
+    fn from_latest_tag_conflicts_with_other_commit_selections() {
+        for args in [
+            &["cococheck", "--from-latest-tag", "HEAD~1.."][..],
+            &["cococheck", "--from-latest-tag", "--from", "HEAD~1"],
+            &["cococheck", "--from-latest-tag", "--message-file", "-"],
+        ] {
+            let error = Cli::try_parse_from(args).unwrap_err();
+
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
+
+        let args = Cli::try_parse_from(["cococheck", "--from-latest-tag", "--to", "HEAD"]).unwrap();
+        assert!(args.from_latest_tag);
     }
 
     #[test]
