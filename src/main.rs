@@ -773,12 +773,12 @@ mod tests {
 
     /// The workspace root, which contains a `cococheck.yml`.
     fn workspace_root() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
     }
 
-    /// The CLI crate directory, which does not contain a `cococheck.yml`.
+    /// The source directory, which does not contain a `cococheck.yml`.
     fn dir_without_config() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
     }
 
     fn message(id: Option<&str>, text: &str) -> Message {
