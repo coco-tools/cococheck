@@ -1,8 +1,8 @@
 use super::{Rule, RuleError};
 use crate::parser::ConventionalCommit;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 pub struct HeaderLength {
     pub max_length: usize,

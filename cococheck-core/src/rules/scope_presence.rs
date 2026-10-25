@@ -1,15 +1,15 @@
 use crate::parser::ConventionalCommit;
 use crate::rules::{Rule, RuleError, scope_span};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 pub struct ScopePresence {
     pub scope: Presence,
 }
 
 /// Whether a commit must have a scope.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Presence {
     /// A commit can have a scope, but does not have to.

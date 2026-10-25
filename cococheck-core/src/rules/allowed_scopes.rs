@@ -1,8 +1,8 @@
 use crate::parser::ConventionalCommit;
 use crate::rules::{Rule, RuleError, scope_span};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 pub struct AllowedScopes {
     /// The allowed scopes. If it is empty, any scope is allowed.

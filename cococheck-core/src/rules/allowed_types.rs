@@ -1,8 +1,8 @@
 use crate::parser::ConventionalCommit;
 use crate::rules::{Rule, RuleError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 pub struct AllowedTypes {
     pub types: Vec<String>,

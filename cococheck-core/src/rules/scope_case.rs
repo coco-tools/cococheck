@@ -1,15 +1,15 @@
 use crate::parser::ConventionalCommit;
 use crate::rules::{Rule, RuleError, scope_span};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(default)]
 pub struct ScopeCase {
     pub case: ScopeCaseMode,
 }
 
 /// The required case of the scope.
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScopeCaseMode {
     /// The scope must not contain uppercase letters, like `core`.

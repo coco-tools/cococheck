@@ -1,5 +1,5 @@
 use regex::regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
 /// A parsed commit message. The header is always the first line of the message, so positions in
@@ -109,7 +109,7 @@ impl std::fmt::Display for HeaderPart {
     }
 }
 
-#[derive(Debug, Default, Deserialize, PartialEq)]
+#[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ParserConfig {
     /// How the footer paragraphs at the end of the commit message are detected.
@@ -117,7 +117,7 @@ pub struct ParserConfig {
     pub footer_detection: FooterDetection,
 }
 
-#[derive(Debug, Default, Deserialize, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, Deserialize, PartialEq, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FooterDetection {
     /// Only the last paragraph can contain footers, if its first line is a footer.

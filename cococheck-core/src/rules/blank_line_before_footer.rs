@@ -1,8 +1,8 @@
 use super::{Rule, RuleError};
 use crate::parser::{ConventionalCommit, Line, parse_footer_line};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct BlankLineBeforeFooter {}
 
 impl Rule for BlankLineBeforeFooter {
