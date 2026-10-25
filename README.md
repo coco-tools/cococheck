@@ -86,6 +86,7 @@ CoCoCheck finished checking 3 commits.
 | `--print-config`        | Print the [configuration](#effective-configuration) and exit |             |
 |                         | without checking commits.                                    |             |
 | `--color <WHEN>`        | [Color](#colors) the text report: `auto`, `always`, `never`. | `auto`      |
+| `--deny-warnings`       | Fail commits that only have [warnings](#rules).              |             |
 | `-v`, `--verbose`       | Log informational messages, such as passed commits. Give it  |             |
 |                         | twice (`-vv`) to also log debug messages, such as the parsed |             |
 |                         | commits.                                                     |             |
@@ -271,8 +272,8 @@ The exit status is the same as for the text report.
 
 CoCoCheck exits with status `0` if all commits pass, and with status `1` if any commit fails or an
 error occurs, for example because the repository or a revision cannot be found. Violations of rules
-with the severity [`warning`](#rules) are reported, but do not cause a commit to fail. This makes it
-suitable for use in CI pipelines and Git hooks.
+with the severity [`warning`](#rules) are reported, but do not cause a commit to fail, unless
+`--deny-warnings` is given. This makes it suitable for use in CI pipelines and Git hooks.
 
 ## Configuration
 
@@ -480,6 +481,11 @@ rules:
 
 Warnings are reported like errors, but a commit that only has warnings passes, and CoCoCheck still
 exits with status `0`.
+
+To keep warnings advisory in the [`commit-msg` hook](#commit-msg-hook), but enforce them in CI,
+pass `--deny-warnings` in CI. A commit with warnings then fails: It is reported as failed, with an
+outcome of `failed` in the [JSON output](#json-output), and CoCoCheck exits with status `1`. The
+violations are still reported as warnings.
 
 #### `allowed_scopes`
 
