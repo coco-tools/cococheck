@@ -80,6 +80,7 @@ CoCoCheck finished checking 3 commits.
 | `-c`, `--config <PATH>` | Path to the [configuration](#configuration) file.            | See below   |
 | `--from <FROM>`         | Check only commits after this one. It is not checked itself. | All commits |
 | `--to <TO>`             | Last commit to check. The commit itself is checked.          | `HEAD`      |
+| `--from-latest-tag`     | Check only commits after the [latest tag](#latest-tag).      |             |
 | `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).             |             |
 | `--format <FORMAT>`     | Report as `text` or [`json`](#json-output).                  | `text`      |
 | `--print-config`        | Print the [configuration](#effective-configuration) and exit |             |
@@ -120,11 +121,27 @@ Alternatively, the ends of the range can be given with `--from` and `--to`: `--f
 same as `A..B`. Both are optional, so `--to B` checks all commits up to `B`, which cannot be
 expressed with a revision range. `--from` and `--to` cannot be combined with a revision range.
 
+#### Latest tag
+
+To check the commits that go into the next release, pass `--from-latest-tag`. It works like
+`--from` with the latest tag that is reachable from `--to`, or from `HEAD` if `--to` is not given,
+so the following commands are equivalent:
+
+```shell
+cococheck --from-latest-tag
+cococheck "$(git describe --tags --abbrev=0)..HEAD"
+```
+
+Like for `git describe --tags`, the latest tag is the one with the fewest commits between it and
+`--to`, and both annotated and lightweight tags count. If `--to` itself is tagged, there are no
+commits to check. If no tag is reachable, for example before the first release, all commits up to
+`--to` are checked. `--from-latest-tag` cannot be combined with `--from` or a revision range.
+
 ### `commit-msg` hook
 
 To check a commit message before the commit is created, pass the file that contains the message
 with `--message-file`, or `-` to read the message from standard input. This cannot be combined with
-a revision range, `--from` or `--to`.
+a revision range, `--from`, `--to`, or `--from-latest-tag`.
 
 Like Git, CoCoCheck cleans up the message before checking it: It removes comment lines and, for
 `git commit --verbose`, the scissors line and the diff below it, and removes surplus whitespace.

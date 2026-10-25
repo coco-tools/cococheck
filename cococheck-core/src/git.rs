@@ -1,5 +1,7 @@
 use crate::message::{CleanupMode, MessageCleanup};
-use git2::{Commit, ErrorCode, Oid, Repository, Sort};
+use git2::{
+    Commit, DescribeFormatOptions, DescribeOptions, ErrorClass, ErrorCode, Oid, Repository, Sort,
+};
 use std::path::Path;
 
 #[derive(Debug, PartialEq)]
@@ -83,17 +85,7 @@ pub fn get_commits(
 ) -> Result<CommitRange, GitError> {
     let repo = Repository::open(repo_path).map_err(GitError::OpenRepository)?;
 
-    let to_oid = match to {
-        Some(revision) => resolve_revision(&repo, "to", revision)?,
-        None => repo
-            .head()
-            .map_err(|e| match e.code() {
-                ErrorCode::UnbornBranch => GitError::NoCommits,
-                _ => e.into(),
-            })?
-            .peel_to_commit()?
-            .id(),
-    };
+    let to_oid = resolve_to(&repo, to)?;
     let from_oid = from
         .map(|revision| resolve_revision(&repo, "from", revision))
         .transpose()?;
@@ -105,6 +97,30 @@ pub fn get_commits(
         to: to_oid.to_string(),
         commits,
     })
+}
+
+/// Find the latest tag of the repository at `repo_path` that is reachable from `to`, or from `HEAD`
+/// if `to` is not set, and return its name. Like `git describe --tags --abbrev=0`, this is the tag
+/// with the fewest commits between it and `to`, and both annotated and lightweight tags are
+/// considered. Return `None` if no tag is reachable from `to`.
+pub fn find_latest_tag(repo_path: &Path, to: Option<&str>) -> Result<Option<String>, GitError> {
+    let repo = Repository::open(repo_path).map_err(GitError::OpenRepository)?;
+    let to_oid = resolve_to(&repo, to)?;
+
+    let commit = repo.find_commit(to_oid)?;
+    let describe = match commit
+        .as_object()
+        .describe(DescribeOptions::new().describe_tags())
+    {
+        Ok(describe) => describe,
+        // libgit2 reports that no tag is reachable with a describe error, whose code is generic if
+        // the repository has no tags at all.
+        Err(e) if e.class() == ErrorClass::Describe => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+
+    let name = describe.format(Some(DescribeFormatOptions::new().abbreviated_size(0)))?;
+    Ok(Some(name))
 }
 
 /// Get the commits of the repository at `repo_path` that are selected by `revisions`, ordered from
@@ -170,6 +186,21 @@ fn configured_message_cleanup(config: &git2::Config) -> MessageCleanup {
         .unwrap_or(default.comment);
 
     MessageCleanup { mode, comment }
+}
+
+/// Resolve the `to` revision to a commit, or `HEAD` if it is not set.
+fn resolve_to(repo: &Repository, to: Option<&str>) -> Result<Oid, GitError> {
+    match to {
+        Some(revision) => resolve_revision(repo, "to", revision),
+        None => Ok(repo
+            .head()
+            .map_err(|e| match e.code() {
+                ErrorCode::UnbornBranch => GitError::NoCommits,
+                _ => e.into(),
+            })?
+            .peel_to_commit()?
+            .id()),
+    }
 }
 
 fn resolve_revision(
@@ -395,6 +426,86 @@ mod tests {
         let mut messages = messages(&range);
         messages.sort();
         assert_eq!(messages, vec!["base", "main", "merge", "side"]);
+    }
+
+    /// Create an annotated tag with the given `name` that points to the commit `oid`.
+    fn annotated_tag(repo: &Repository, name: &str, oid: Oid) {
+        let signature = Signature::new("Test", "test@example.org", &Time::new(0, 0)).unwrap();
+        let target = repo.find_object(oid, None).unwrap();
+        repo.tag(name, &target, &signature, name, false).unwrap();
+    }
+
+    /// Create a lightweight tag with the given `name` that points to the commit `oid`.
+    fn lightweight_tag(repo: &Repository, name: &str, oid: Oid) {
+        let target = repo.find_object(oid, None).unwrap();
+        repo.tag_lightweight(name, &target, false).unwrap();
+    }
+
+    #[test]
+    fn finds_the_latest_tag_reachable_from_head() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second", "third", "fourth"]);
+        annotated_tag(&repo, "v1", oids[0]);
+        annotated_tag(&repo, "v2", oids[1]);
+
+        assert_eq!(
+            find_latest_tag(dir.path(), None).unwrap(),
+            Some("v2".to_string())
+        );
+    }
+
+    #[test]
+    fn finds_lightweight_tags() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second", "third"]);
+        annotated_tag(&repo, "v1", oids[0]);
+        lightweight_tag(&repo, "v2", oids[1]);
+
+        assert_eq!(
+            find_latest_tag(dir.path(), None).unwrap(),
+            Some("v2".to_string())
+        );
+    }
+
+    #[test]
+    fn finds_the_latest_tag_reachable_from_to() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second", "third", "fourth"]);
+        annotated_tag(&repo, "v1", oids[0]);
+        annotated_tag(&repo, "v2", oids[2]);
+
+        assert_eq!(
+            find_latest_tag(dir.path(), Some(&oids[1].to_string())).unwrap(),
+            Some("v1".to_string())
+        );
+    }
+
+    #[test]
+    fn finds_a_tag_on_to_itself() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second"]);
+        annotated_tag(&repo, "v1", oids[1]);
+
+        assert_eq!(
+            find_latest_tag(dir.path(), None).unwrap(),
+            Some("v1".to_string())
+        );
+    }
+
+    #[test]
+    fn finds_no_tag_if_none_is_reachable() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second"]);
+
+        assert_eq!(find_latest_tag(dir.path(), None).unwrap(), None);
+
+        // A tag on a commit that is not reachable from `to` is not found either.
+        let side = commit(&repo, "side", &[oids[0]]);
+        annotated_tag(&repo, "v1", side);
+        assert_eq!(
+            find_latest_tag(dir.path(), Some(&oids[1].to_string())).unwrap(),
+            None
+        );
     }
 
     #[test]
