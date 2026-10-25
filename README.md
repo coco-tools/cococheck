@@ -565,6 +565,8 @@ Bug reports, feature requests, and pull requests are welcome. Please
 [open an issue](https://github.com/coco-tools/cococheck/issues) to discuss larger changes before
 starting work on them.
 
+Please report security vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
+
 To build the project and run the tests:
 
 ```shell
