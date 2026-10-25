@@ -321,6 +321,15 @@ rules:
     enabled: true
     severity: error
     case: any
+  footer_length:
+    enabled: true
+    severity: error
+    max_length: null
+  footer_line_length:
+    enabled: true
+    severity: error
+    max_length: null
+    ignore_urls: true
   header_length:
     enabled: true
     severity: error
@@ -438,7 +447,7 @@ The forbidden patterns also apply to the [`commit-msg` hook](#commit-msg-hook), 
 fixup commits prevents creating them. To forbid them only in CI, keep them in a separate
 configuration file that is passed with `--config` in CI.
 
-| Setting     | Description                                         | Default |
+| Setting     | Description                                        | Default |
 |-------------|----------------------------------------------------|---------|
 | `forbidden` | Regular expressions for messages that always fail. | `[]`    |
 
@@ -570,7 +579,8 @@ limits are unset by default, so the rule passes every commit unless one of them 
 Limits the length of each line in the body. Lengths are counted in Unicode characters, not bytes.
 
 Long URLs cannot be wrapped, so by default lines that contain a URL starting with `http://` or
-`https://` are not checked, as in commitlint.
+`https://` are not checked, as in commitlint. The footers are not part of the body; their lines are
+checked by [`footer_line_length`](#footer_line_length).
 
 | Setting       | Description                                       | Default |
 |---------------|---------------------------------------------------|---------|
@@ -597,6 +607,39 @@ first character is checked, and a description that does not start with a letter,
 | `severity` | Whether a violation is an `error` or a `warning`. | `error` |
 | `case`     | The required case of the first letter.            | `any`   |
 
+#### `footer_length`
+
+Limits the length of all footers together, like commitlint's `footer-max-length`. They are measured
+like the body by [`body_length`](#body_length): lengths are counted in Unicode characters, every
+line break counts as one character, and multiple blank lines between footer paragraphs count as
+one. The limit is unset by default, so the rule passes every commit unless it is configured.
+
+| Setting      | Description                                                          | Default |
+|--------------|----------------------------------------------------------------------|---------|
+| `enabled`    | Whether the rule is applied.                                         | `true`  |
+| `severity`   | Whether a violation is an `error` or a `warning`.                    | `error` |
+| `max_length` | The maximum number of characters of all footers, or `null` for none. | `null`  |
+
+#### `footer_line_length`
+
+Limits the length of each line of the footers, like commitlint's `footer-max-line-length`. Lengths
+are counted in Unicode characters, not bytes. Like in [`body_line_length`](#body_line_length),
+lines that contain a URL are not checked by default, because footers like `Refs: https://…` cannot
+be wrapped. The limit is unset by default, so the rule passes every commit unless it is configured:
+
+```yaml
+rules:
+  footer_line_length:
+    max_length: 72
+```
+
+| Setting       | Description                                                    | Default |
+|---------------|----------------------------------------------------------------|---------|
+| `enabled`     | Whether the rule is applied.                                   | `true`  |
+| `severity`    | Whether a violation is an `error` or a `warning`.              | `error` |
+| `max_length`  | The maximum number of characters per line, or `null` for none. | `null`  |
+| `ignore_urls` | Whether lines that contain a URL are skipped.                  | `true`  |
+
 #### `header_length`
 
 Limits the length of the header line. Lengths are counted in Unicode characters, not bytes.
@@ -622,11 +665,11 @@ rules:
 As the description is the end of the header, this rule also limits how the header ends, like
 commitlint's `header-full-stop` and `subject-full-stop` rules.
 
-| Setting      | Description                                         | Default |
-|--------------|-----------------------------------------------------|---------|
-| `enabled`    | Whether the rule is applied.                        | `true`  |
-| `severity`   | Whether a violation is an `error` or a `warning`.   | `error` |
-| `characters` | The characters the description must not end with.   | `.!?`   |
+| Setting      | Description                                       | Default |
+|--------------|---------------------------------------------------|---------|
+| `enabled`    | Whether the rule is applied.                      | `true`  |
+| `severity`   | Whether a violation is an `error` or a `warning`. | `error` |
+| `characters` | The characters the description must not end with. | `.!?`   |
 
 #### `no_trailing_whitespace`
 
