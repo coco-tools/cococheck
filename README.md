@@ -264,7 +264,7 @@ rules:
   allowed_types:
     enabled: true
     severity: error
-    allowed_types: [build, chore, ci, deps, docs, feat, fix, perf, refactor, revert, style, test]
+    types: [build, chore, ci, deps, docs, feat, fix, perf, refactor, revert, style, test]
   blank_line_before_footer:
     enabled: true
     severity: error
@@ -404,11 +404,11 @@ empty and any scope is allowed.
 
 Requires the commit type to be one of a fixed list of types.
 
-| Setting         | Description                                                  | Default                                                                                              |
-|-----------------|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `enabled`       | Whether the rule is applied.                                 | `true`                                                                                               |
-| `severity`      | Whether a violation is an `error` or a `warning`.            | `error`                                                                                              |
-| `allowed_types` | The permitted types. A configured list replaces the default. | `build`, `chore`, `ci`, `deps`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test` |
+| Setting    | Description                                                  | Default                                                                                              |
+|------------|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `enabled`  | Whether the rule is applied.                                 | `true`                                                                                               |
+| `severity` | Whether a violation is an `error` or a `warning`.            | `error`                                                                                              |
+| `types`    | The permitted types. A configured list replaces the default. | `build`, `chore`, `ci`, `deps`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test` |
 
 #### `blank_line_before_footer`
 
