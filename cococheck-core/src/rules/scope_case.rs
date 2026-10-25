@@ -22,7 +22,7 @@ pub enum ScopeCaseMode {
 
 impl Rule for ScopeCase {
     fn name(&self) -> &str {
-        "ScopeCase"
+        "scope_case"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

@@ -25,7 +25,7 @@ pub enum DescriptionCaseMode {
 
 impl Rule for DescriptionCase {
     fn name(&self) -> &str {
-        "DescriptionCase"
+        "description_case"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

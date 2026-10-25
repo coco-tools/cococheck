@@ -635,7 +635,7 @@ mod tests {
         );
         for commit in json["commits"].as_array_mut().unwrap() {
             commit["rules"].as_array_mut().unwrap().retain(|rule| {
-                ["HeaderLength", "NoDescriptionTerminalPunctuation"]
+                ["header_length", "no_description_terminal_punctuation"]
                     .contains(&rule["rule"].as_str().unwrap())
             });
         }
@@ -658,9 +658,9 @@ mod tests {
                         "outcome": "passed",
                         "parse_error": null,
                         "rules": [
-                            { "rule": "HeaderLength", "severity": "warning", "errors": [] },
+                            { "rule": "header_length", "severity": "warning", "errors": [] },
                             {
-                                "rule": "NoDescriptionTerminalPunctuation",
+                                "rule": "no_description_terminal_punctuation",
                                 "severity": "error",
                                 "errors": []
                             }
@@ -673,12 +673,12 @@ mod tests {
                         "parse_error": null,
                         "rules": [
                             {
-                                "rule": "HeaderLength",
+                                "rule": "header_length",
                                 "severity": "warning",
                                 "errors": [header_length_error(32)]
                             },
                             {
-                                "rule": "NoDescriptionTerminalPunctuation",
+                                "rule": "no_description_terminal_punctuation",
                                 "severity": "error",
                                 "errors": []
                             }
@@ -691,12 +691,12 @@ mod tests {
                         "parse_error": null,
                         "rules": [
                             {
-                                "rule": "HeaderLength",
+                                "rule": "header_length",
                                 "severity": "warning",
                                 "errors": [header_length_error(37)]
                             },
                             {
-                                "rule": "NoDescriptionTerminalPunctuation",
+                                "rule": "no_description_terminal_punctuation",
                                 "severity": "error",
                                 "errors": [{
                                     "message": "Description should not end with terminal punctuation (., !, ?).",

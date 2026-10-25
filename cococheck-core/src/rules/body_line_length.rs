@@ -22,7 +22,7 @@ impl Default for BodyLineLength {
 
 impl Rule for BodyLineLength {
     fn name(&self) -> &str {
-        "BodyLineLength"
+        "body_line_length"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
