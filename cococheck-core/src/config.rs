@@ -1,8 +1,9 @@
 use crate::parser::ParserConfig;
 use crate::rules::{
     AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLength, BodyLineLength,
-    DescriptionCase, HeaderLength, NoDescriptionTerminalPunctuation, NoTrailingWhitespace,
-    RequiredFooters, RuleConfig, ScopeCase, ScopePresence, TypeCase,
+    DescriptionCase, FooterLength, FooterLineLength, HeaderLength,
+    NoDescriptionTerminalPunctuation, NoTrailingWhitespace, RequiredFooters, RuleConfig, ScopeCase,
+    ScopePresence, TypeCase,
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -188,6 +189,12 @@ pub struct RulesConfig {
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub description_case: RuleConfig<DescriptionCase>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub footer_length: RuleConfig<FooterLength>,
+
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub footer_line_length: RuleConfig<FooterLineLength>,
 
     #[serde(default, deserialize_with = "null_as_default")]
     pub header_length: RuleConfig<HeaderLength>,
@@ -710,6 +717,32 @@ mod tests {
             config.rules.no_description_terminal_punctuation.rule,
             NoDescriptionTerminalPunctuation {
                 characters: ".,;:".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn read_footer_lengths() {
+        let yaml = r#"
+        rules:
+          footer_length:
+            max_length: 500
+          footer_line_length:
+            max_length: 100
+            ignore_urls: false
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.footer_length.rule,
+            FooterLength {
+                max_length: Some(500)
+            }
+        );
+        assert_eq!(
+            config.rules.footer_line_length.rule,
+            FooterLineLength {
+                max_length: Some(100),
+                ignore_urls: false,
             }
         );
     }
