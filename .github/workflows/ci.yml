@@ -70,7 +70,7 @@ jobs:
       # use its head commit instead of the checked out merge commit that GitHub creates. For a push
       # to main, check the pushed commits, which can differ from the commits of the pull request,
       # e.g. for a squash merge.
-      - run: cargo run -p cococheck-cli -- --from "$FROM" --to "$TO"
+      - run: cargo run -p cococheck -- --from "$FROM" --to "$TO"
         env:
           FROM: ${{ github.event.pull_request.base.sha || github.event.before }}
           TO: ${{ github.event.pull_request.head.sha || github.sha }}
