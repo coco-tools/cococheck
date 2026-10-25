@@ -54,7 +54,10 @@ struct Cli {
 
     /// Print the effective configuration as YAML, including the defaults of omitted settings, and
     /// exit without checking commits
-    #[arg(long, conflicts_with_all = ["revisions", "from", "to", "message_file"])]
+    #[arg(
+        long,
+        conflicts_with_all = ["revisions", "from", "to", "from_latest_tag", "message_file"]
+    )]
     print_config: bool,
 
     /// The format of the report on standard output
@@ -932,6 +935,7 @@ mod tests {
             &["cococheck", "--print-config", "HEAD"][..],
             &["cococheck", "--print-config", "--from", "HEAD~1"],
             &["cococheck", "--print-config", "--to", "HEAD"],
+            &["cococheck", "--print-config", "--from-latest-tag"],
             &["cococheck", "--print-config", "--message-file", "-"],
         ] {
             let error = Cli::try_parse_from(args).unwrap_err();
