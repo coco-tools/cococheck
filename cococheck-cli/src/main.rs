@@ -367,7 +367,7 @@ struct JsonCommit<'a> {
 struct JsonRule<'a> {
     rule: &'a str,
     severity: Severity,
-    errors: Vec<JsonError>,
+    violations: Vec<JsonError>,
 }
 
 #[derive(Serialize)]
@@ -410,7 +410,7 @@ impl<'a> JsonReport<'a> {
                     .map(|result| JsonRule {
                         rule: &result.rule_name,
                         severity: result.severity,
-                        errors: result
+                        violations: result
                             .errors
                             .iter()
                             .map(|e| JsonError {
@@ -640,7 +640,7 @@ mod tests {
             });
         }
 
-        let header_length_error = |actual: usize| {
+        let header_length_violation = |actual: usize| {
             serde_json::json!({
                 "message": format!(
                     "Header exceeds maximum length of 30 characters (actual: {actual})."
@@ -658,11 +658,11 @@ mod tests {
                         "outcome": "passed",
                         "parse_error": null,
                         "rules": [
-                            { "rule": "header_length", "severity": "warning", "errors": [] },
+                            { "rule": "header_length", "severity": "warning", "violations": [] },
                             {
                                 "rule": "no_description_terminal_punctuation",
                                 "severity": "error",
-                                "errors": []
+                                "violations": []
                             }
                         ]
                     },
@@ -675,12 +675,12 @@ mod tests {
                             {
                                 "rule": "header_length",
                                 "severity": "warning",
-                                "errors": [header_length_error(32)]
+                                "violations": [header_length_violation(32)]
                             },
                             {
                                 "rule": "no_description_terminal_punctuation",
                                 "severity": "error",
-                                "errors": []
+                                "violations": []
                             }
                         ]
                     },
@@ -693,12 +693,12 @@ mod tests {
                             {
                                 "rule": "header_length",
                                 "severity": "warning",
-                                "errors": [header_length_error(37)]
+                                "violations": [header_length_violation(37)]
                             },
                             {
                                 "rule": "no_description_terminal_punctuation",
                                 "severity": "error",
-                                "errors": [{
+                                "violations": [{
                                     "message": "Description should not end with terminal punctuation (., !, ?).",
                                     "span": { "start": 36, "end": 37 }
                                 }]
