@@ -14,13 +14,20 @@ use std::sync::LazyLock;
 /// The patterns of the messages that Git and Git hosting platforms create, which do not follow the
 /// Conventional Commits specification and are ignored by default.
 const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
-    // Merges created by `git merge` and `git pull`, and by Git hosting platforms.
+    // Merges created by `git merge` and `git pull`, and by Git hosting platforms. As `.` does not
+    // match line breaks, the patterns with `into` only match the first line.
     r"^Merge (branch|branches|tag|tags|commit|remote-tracking branch|pull request) ",
+    r"^Merge .+ into ",
     r"^Merged (in|PR) ",
+    r"^Merged .+ into ",
+    r"^Automatic merge",
+    r"^Auto-merged .+ into ",
     // Reverts created by `git revert`, which creates `Reapply` for the revert of a revert.
     r#"^(Revert|Reapply) ""#,
     // Commits created by `git commit --fixup` and `git commit --squash`.
     r"^(amend|fixup|squash)! ",
+    // Messages that only consist of a version, like the commits created by `npm version`.
+    r"^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$",
 ];
 
 static DEFAULT_IGNORES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
@@ -359,8 +366,16 @@ mod tests {
             "Merge tag 'v1.0.0'",
             "Merge commit '0123456'",
             "Merge pull request #1 from example/feature\n\nfeat: Add a feature",
+            "Merge 'feature' into main",
+            "Merge feature/a into develop\n\n* feature/a:\n  feat: Add a feature",
             "Merged in feature (pull request #1)",
             "Merged PR 1: Add a feature",
+            "Merged feature into main",
+            "Automatic merge from release/1.0 -> main",
+            "Auto-merged release/1.0 into main",
+            "1.2.3",
+            "v1.2.3\n",
+            "v10.0.0-beta.1+build.5",
             "Revert \"feat: Add a feature\"\n\nThis reverts commit 0123456.",
             "Reapply \"feat: Add a feature\"",
             "fixup! feat: Add a feature",
@@ -382,7 +397,14 @@ mod tests {
             "fix: Merge branch names correctly",
             "Merge the configurations",
             "Update stuff\n\nMerge branch 'feature'",
+            "Merge the configurations\n\nThey are moved into one file.",
             "fixup: Not a fixup commit",
+            "Revert the last change",
+            "1.2",
+            "1.2.3.4",
+            "01.2.3",
+            "1.2.3\n\nfeat: Add a feature",
+            "Release 1.2.3",
         ];
 
         for message in messages {

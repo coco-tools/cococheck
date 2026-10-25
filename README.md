@@ -388,17 +388,24 @@ these requirements fails with a parse error, and no rules are applied to it. Com
 
 ### Ignored commits
 
-Git creates messages that do not follow the Conventional Commits specification, for example for
-merge commits. Like commitlint, CoCoCheck ignores commits with such messages by default. A message
-is ignored if it starts with one of the following:
+Git, Git hosting platforms, and release tools create messages that do not follow the Conventional
+Commits specification, for example for merge commits. Like commitlint, CoCoCheck ignores commits
+with such messages by default. A message is ignored if it starts with one of the following:
 
 - `Merge branch `, `Merge branches `, `Merge tag `, `Merge tags `, `Merge commit `,
   `Merge remote-tracking branch `, or `Merge pull request `, as created by `git merge`, `git pull`,
   and GitHub or GitLab when merging a pull request.
-- `Merged in ` or `Merged PR `, as created by Bitbucket and Azure DevOps when merging a pull
-  request.
+- `Merge X into Y`, `Merged X into Y`, `Merged in `, `Merged PR `, `Automatic merge`, or
+  `Auto-merged X into Y`, as created by Bitbucket, Azure DevOps, and other tools when merging a
+  pull request or branch. `into` must be in the first line.
 - `Revert "` or `Reapply "`, as created by `git revert`.
 - `fixup! `, `squash! `, or `amend! `, as created by `git commit --fixup` and `git commit --squash`.
+
+A message is also ignored if it only consists of a [semantic version](https://semver.org/), with an
+optional `v` prefix, like `1.2.3` or `v1.2.3-rc.1`, as created by `npm version`.
+
+Unlike commitlint, CoCoCheck does not ignore messages like `Revert the last change` or
+`revert: Remove a feature`, because they are written by hand, not created by Git.
 
 To ignore further commits, add [regular expressions](https://docs.rs/regex/latest/regex/#syntax) to
 `ignores`. The expressions are matched against the whole message, without trailing whitespace, and
@@ -417,10 +424,10 @@ ignores:
 To check the commits that are ignored by default, set `default_ignores` to `false`. The expressions
 in `ignores` still apply.
 
-| Setting           | Description                                                          | Default |
-|-------------------|----------------------------------------------------------------------|---------|
-| `default_ignores` | Whether the messages that Git creates, as listed above, are ignored. | `true`  |
-| `ignores`         | Regular expressions for further messages to ignore.                  | `[]`    |
+| Setting           | Description                                         | Default |
+|-------------------|-----------------------------------------------------|---------|
+| `default_ignores` | Whether the messages listed above are ignored.      | `true`  |
+| `ignores`         | Regular expressions for further messages to ignore. | `[]`    |
 
 ### Forbidden commits
 
