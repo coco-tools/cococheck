@@ -8,6 +8,8 @@ use std::path::Path;
 pub struct CommitInfo {
     pub id: String,
     pub message: String,
+    /// Whether the commit is a merge commit, which has more than one parent.
+    pub is_merge: bool,
 }
 
 #[derive(Debug)]
@@ -251,6 +253,7 @@ fn commit_info(commit: &Commit) -> CommitInfo {
     CommitInfo {
         id: commit.id().to_string(),
         message: String::from_utf8_lossy(commit.message_bytes()).into_owned(),
+        is_merge: commit.parent_count() > 1,
     }
 }
 
@@ -569,8 +572,29 @@ mod tests {
             vec![CommitInfo {
                 id: oids[0].to_string(),
                 message: "first".to_string(),
+                is_merge: false,
             }]
         );
+    }
+
+    #[test]
+    fn detects_merge_commits_by_their_parents() {
+        let (dir, repo) = init_repo();
+        let oids = linear_history(&repo, &["first", "second"]);
+        let side = commit(&repo, "side", &[oids[0]]);
+        commit(&repo, "feat: Merge the side branch", &[oids[1], side]);
+
+        let range = get_commits(dir.path(), None, None).unwrap();
+
+        let merges: Vec<(&str, bool)> = range
+            .commits
+            .iter()
+            .map(|c| (c.message.as_str(), c.is_merge))
+            .collect();
+        assert_eq!(merges.len(), 4);
+        assert!(merges.contains(&("feat: Merge the side branch", true)));
+        assert!(merges.contains(&("side", false)));
+        assert!(merges.contains(&("second", false)));
     }
 
     #[test]

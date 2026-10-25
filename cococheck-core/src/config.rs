@@ -53,6 +53,11 @@ pub struct Config {
     #[serde(default = "default_default_ignores")]
     pub default_ignores: bool,
 
+    /// Whether merge commits, which have more than one parent, are ignored, regardless of their
+    /// message.
+    #[serde(default = "default_ignore_merge_commits")]
+    pub ignore_merge_commits: bool,
+
     /// Regular expressions for further messages to ignore. A message is ignored if any part of it
     /// matches one of them.
     #[serde(
@@ -74,6 +79,7 @@ impl Default for Config {
         Config {
             forbidden: Vec::new(),
             default_ignores: default_default_ignores(),
+            ignore_merge_commits: default_ignore_merge_commits(),
             ignores: Vec::new(),
             parser: ParserConfig::default(),
             rules: RulesConfig::default(),
@@ -133,6 +139,10 @@ impl Config {
 }
 
 fn default_default_ignores() -> bool {
+    true
+}
+
+fn default_ignore_merge_commits() -> bool {
     true
 }
 
@@ -417,6 +427,16 @@ mod tests {
         let config = parse_config("default_ignores: false").unwrap();
         assert!(!config.is_ignored("Merge branch 'feature'"));
         assert!(!config.is_ignored("fixup! feat: Add a feature"));
+    }
+
+    #[test]
+    fn ignores_merge_commits_by_default() {
+        assert!(parse_config("").unwrap().ignore_merge_commits);
+        assert!(
+            !parse_config("ignore_merge_commits: false")
+                .unwrap()
+                .ignore_merge_commits
+        );
     }
 
     #[test]
@@ -964,6 +984,7 @@ mod tests {
         for key in [
             "forbidden: []",
             "default_ignores: true",
+            "ignore_merge_commits: true",
             "ignores: []",
             "footer_detection: last_paragraph",
             "allowed_types:",

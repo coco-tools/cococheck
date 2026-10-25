@@ -289,6 +289,7 @@ The following file sets every option to its default value:
 ```yaml
 forbidden: []
 default_ignores: true
+ignore_merge_commits: true
 ignores: []
 
 parser:
@@ -423,10 +424,18 @@ ignores:
 To check the commits that are ignored by default, set `default_ignores` to `false`. The expressions
 in `ignores` still apply.
 
-| Setting           | Description                                         | Default |
-|-------------------|-----------------------------------------------------|---------|
-| `default_ignores` | Whether the messages listed above are ignored.      | `true`  |
-| `ignores`         | Regular expressions for further messages to ignore. | `[]`    |
+Merge commits, which have more than one parent, are also ignored regardless of their message, so
+that a merge commit with a custom message, for example from `git merge -m`, does not fail the
+checks. To check their messages, set `ignore_merge_commits` to `false`; merge commits whose message
+matches one of the patterns above are still ignored. In the [`commit-msg` hook](#commit-msg-hook),
+the commit does not exist yet, so `ignore_merge_commits` does not apply, but the default message
+of `git merge` is ignored by `default_ignores`.
+
+| Setting                | Description                                            | Default |
+|------------------------|--------------------------------------------------------|---------|
+| `default_ignores`      | Whether the messages listed above are ignored.         | `true`  |
+| `ignore_merge_commits` | Whether commits with more than one parent are ignored. | `true`  |
+| `ignores`              | Regular expressions for further messages to ignore.    | `[]`    |
 
 ### Forbidden commits
 

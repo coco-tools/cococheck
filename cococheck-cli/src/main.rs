@@ -220,6 +220,8 @@ struct Message {
     /// The name that refers to the message in the report.
     name: String,
     text: String,
+    /// Whether the message is the message of a merge commit.
+    is_merge: bool,
 }
 
 /// Collect the messages of the commits selected by `args`, ordered from oldest to newest.
@@ -267,6 +269,7 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
             name: format!("Commit {}", commit.id),
             id: Some(commit.id),
             text: commit.message,
+            is_merge: commit.is_merge,
         })
         .collect();
 
@@ -293,6 +296,8 @@ fn read_message_file(repo_path: &Path, path: &Path) -> anyhow::Result<Message> {
         id: None,
         name: "Commit message".to_string(),
         text: cleanup.clean(&String::from_utf8_lossy(&bytes)),
+        // The commit does not exist yet, so its parents are unknown.
+        is_merge: false,
     })
 }
 
@@ -376,7 +381,9 @@ impl<'a> Checker<'a> {
             };
         }
 
-        if self.config.is_ignored(&message.text) {
+        if self.config.is_ignored(&message.text)
+            || (self.config.ignore_merge_commits && message.is_merge)
+        {
             info!("{} is ignored.", message.name);
             return report(Outcome::Ignored, None, vec![]);
         }
@@ -757,7 +764,35 @@ mod tests {
             id: id.map(str::to_string),
             name: "Commit".to_string(),
             text: text.to_string(),
+            is_merge: false,
         }
+    }
+
+    #[test]
+    fn ignores_merge_commits_with_any_message() {
+        let merge = Message {
+            is_merge: true,
+            ..message(Some("a1"), "Update stuff")
+        };
+
+        let config = Config::default();
+        assert_eq!(
+            Checker::new(&config, false).check(&merge).outcome,
+            Outcome::Ignored
+        );
+
+        let config = cococheck_core::config::parse_config("ignore_merge_commits: false").unwrap();
+        assert_eq!(
+            Checker::new(&config, false).check(&merge).outcome,
+            Outcome::Failed
+        );
+
+        // Forbidden patterns also apply to ignored merge commits.
+        let config = cococheck_core::config::parse_config("forbidden: ['stuff']").unwrap();
+        assert_eq!(
+            Checker::new(&config, false).check(&merge).outcome,
+            Outcome::Failed
+        );
     }
 
     #[test]
