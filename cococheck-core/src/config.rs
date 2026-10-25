@@ -657,7 +657,7 @@ mod tests {
             RuleConfig {
                 enabled: false,
                 severity: Severity::Error,
-                rule: NoDescriptionTerminalPunctuation {},
+                rule: NoDescriptionTerminalPunctuation::default(),
             }
         );
     }
@@ -694,6 +694,22 @@ mod tests {
             config.rules.allowed_scopes.rule,
             AllowedScopes {
                 scopes: vec!["cli".to_string(), "core".to_string()]
+            }
+        );
+    }
+
+    #[test]
+    fn read_terminal_punctuation_characters() {
+        let yaml = r#"
+        rules:
+          no_description_terminal_punctuation:
+            characters: ".,;:"
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(
+            config.rules.no_description_terminal_punctuation.rule,
+            NoDescriptionTerminalPunctuation {
+                characters: ".,;:".to_string()
             }
         );
     }
