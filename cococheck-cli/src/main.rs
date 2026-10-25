@@ -224,7 +224,8 @@ enum Outcome {
     /// The commit violated only rules with the severity `warning`.
     PassedWithWarnings,
 
-    /// The commit could not be parsed, or violated a rule with the severity `error`.
+    /// The commit message matches a forbidden pattern, could not be parsed, or violated a rule with
+    /// the severity `error`.
     Failed,
 }
 
@@ -232,11 +233,20 @@ enum Outcome {
 struct Report<'a> {
     message: &'a Message,
     outcome: Outcome,
+    /// The violation of a forbidden pattern, if the message matches one.
+    forbidden: Option<Forbidden>,
     /// The reason why the message could not be parsed, if it could not be parsed.
     parse_error: Option<ParseError>,
-    /// The results of all enabled rules. It is empty if the message is ignored or could not be
-    /// parsed.
+    /// The results of all enabled rules. It is empty if the message is forbidden, ignored, or could
+    /// not be parsed.
     results: Vec<RuleResult>,
+}
+
+/// The violation of a forbidden pattern by a commit message.
+struct Forbidden {
+    message: String,
+    /// The byte range of the match in the commit message.
+    span: Range<usize>,
 }
 
 /// Checks commit messages with the configured parser and rules.
@@ -258,9 +268,25 @@ impl<'a> Checker<'a> {
         let report = |outcome, parse_error, results| Report {
             message,
             outcome,
+            forbidden: None,
             parse_error,
             results,
         };
+
+        // Forbidden patterns are checked first, so that they also apply to ignored messages, like
+        // the messages of fixup commits.
+        if let Some(found) = self.config.find_forbidden(&message.text) {
+            return Report {
+                forbidden: Some(Forbidden {
+                    message: format!(
+                        "Message matches the forbidden pattern '{}'.",
+                        found.pattern.as_str()
+                    ),
+                    span: found.span,
+                }),
+                ..report(Outcome::Failed, None, vec![])
+            };
+        }
 
         if self.config.is_ignored(&message.text) {
             info!("{} is ignored.", message.name);
@@ -319,6 +345,13 @@ impl TextReporter {
         let name = &report.message.name;
         let message = &report.message.text;
 
+        if let Some(forbidden) = &report.forbidden {
+            println!("{} failed:\n", name);
+            let span = Some(forbidden.span.clone());
+            self.print_error(Severity::Error, None, &forbidden.message, span, message);
+            return;
+        }
+
         if let Some(e) = &report.parse_error {
             println!("{} failed to parse:\n", name);
             let span = parse_error_span(e);
@@ -371,6 +404,7 @@ struct JsonCommit<'a> {
     id: Option<&'a str>,
     header: &'a str,
     outcome: Outcome,
+    forbidden_pattern: Option<JsonError>,
     parse_error: Option<JsonError>,
     rules: Vec<JsonRule<'a>>,
 }
@@ -412,6 +446,10 @@ impl<'a> JsonReport<'a> {
                 id: report.message.id.as_deref(),
                 header: report.message.text.lines().next().unwrap_or(""),
                 outcome: report.outcome,
+                forbidden_pattern: report.forbidden.as_ref().map(|forbidden| JsonError {
+                    message: forbidden.message.clone(),
+                    span: Some(JsonSpan::from(forbidden.span.clone())),
+                }),
                 parse_error: report.parse_error.as_ref().map(|e| JsonError {
                     message: e.to_string(),
                     span: parse_error_span(e).map(JsonSpan::from),
@@ -642,7 +680,7 @@ mod tests {
     #[test]
     fn json_report_contains_the_results_of_all_commits() {
         let config = cococheck_core::config::parse_config(
-            "rules: { header_length: { severity: warning, max_length: 30 } }",
+            "{ forbidden: ['^fixup! '], rules: { header_length: { severity: warning, max_length: 30 } } }",
         )
         .unwrap();
         let messages = [
@@ -651,6 +689,7 @@ mod tests {
             message(Some("c3"), "feat: Add a feature that is too long."),
             message(Some("d4"), "Update stuff"),
             message(Some("e5"), "Merge branch 'feature'"),
+            message(Some("f6"), "fixup! feat: Add a feature"),
         ];
         let checker = Checker::new(&config);
         let reports: Vec<Report> = messages.iter().map(|m| checker.check(m)).collect();
@@ -687,6 +726,7 @@ mod tests {
                         "id": null,
                         "header": "feat: Add a feature",
                         "outcome": "passed",
+                        "forbidden_pattern": null,
                         "parse_error": null,
                         "rules": [
                             { "rule": "header_length", "severity": "warning", "violations": [] },
@@ -701,6 +741,7 @@ mod tests {
                         "id": "b2",
                         "header": "feat: Add a feature that is long",
                         "outcome": "passed_with_warnings",
+                        "forbidden_pattern": null,
                         "parse_error": null,
                         "rules": [
                             {
@@ -719,6 +760,7 @@ mod tests {
                         "id": "c3",
                         "header": "feat: Add a feature that is too long.",
                         "outcome": "failed",
+                        "forbidden_pattern": null,
                         "parse_error": null,
                         "rules": [
                             {
@@ -740,6 +782,7 @@ mod tests {
                         "id": "d4",
                         "header": "Update stuff",
                         "outcome": "failed",
+                        "forbidden_pattern": null,
                         "parse_error": {
                             "message": "invalid header: expected ': ' after the type",
                             "span": { "start": 6, "end": 7 }
@@ -750,11 +793,23 @@ mod tests {
                         "id": "e5",
                         "header": "Merge branch 'feature'",
                         "outcome": "ignored",
+                        "forbidden_pattern": null,
+                        "parse_error": null,
+                        "rules": []
+                    },
+                    {
+                        "id": "f6",
+                        "header": "fixup! feat: Add a feature",
+                        "outcome": "failed",
+                        "forbidden_pattern": {
+                            "message": "Message matches the forbidden pattern '^fixup! '.",
+                            "span": { "start": 0, "end": 7 }
+                        },
                         "parse_error": null,
                         "rules": []
                     }
                 ],
-                "summary": { "checked": 4, "ignored": 1, "passed_with_warnings": 1, "failed": 2 }
+                "summary": { "checked": 5, "ignored": 1, "passed_with_warnings": 1, "failed": 3 }
             })
         );
     }
