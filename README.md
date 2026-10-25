@@ -291,6 +291,7 @@ forbidden: []
 default_ignores: true
 ignore_merge_commits: true
 ignores: []
+ignore_authors: []
 
 parser:
   footer_detection: last_paragraph
@@ -431,11 +432,30 @@ matches one of the patterns above are still ignored. In the [`commit-msg` hook](
 the commit does not exist yet, so `ignore_merge_commits` does not apply, but the default message
 of `git merge` is ignored by `default_ignores`.
 
-| Setting                | Description                                            | Default |
-|------------------------|--------------------------------------------------------|---------|
-| `default_ignores`      | Whether the messages listed above are ignored.         | `true`  |
-| `ignore_merge_commits` | Whether commits with more than one parent are ignored. | `true`  |
-| `ignores`              | Regular expressions for further messages to ignore.    | `[]`    |
+Commits by bots like Dependabot or Renovate often have messages that a project cannot easily
+change. To ignore commits by their author, add
+[regular expressions](https://docs.rs/regex/latest/regex/#syntax) to `ignore_authors`. They are
+matched against the author as `Name <email>`, and a commit is ignored if any part of its author
+matches one of them:
+
+```yaml
+ignore_authors:
+  - '^dependabot\[bot\] '
+  - '^renovate\[bot\] '
+```
+
+In the [`commit-msg` hook](#commit-msg-hook), the commit does not exist yet, so CoCoCheck determines
+its author with `git var GIT_AUTHOR_IDENT`. Like Git, this respects the `GIT_AUTHOR_NAME` and
+`GIT_AUTHOR_EMAIL` environment variables and the `author.*` and `user.*` settings. `git commit`
+passes the author to its hooks in these variables, so the `--author` option and the author of an
+amended commit are also respected.
+
+| Setting                | Description                                               | Default |
+|------------------------|-----------------------------------------------------------|---------|
+| `default_ignores`      | Whether the messages listed above are ignored.            | `true`  |
+| `ignore_merge_commits` | Whether commits with more than one parent are ignored.    | `true`  |
+| `ignores`              | Regular expressions for further messages to ignore.       | `[]`    |
+| `ignore_authors`       | Regular expressions for the authors of commits to ignore. | `[]`    |
 
 ### Forbidden commits
 

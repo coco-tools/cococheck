@@ -67,6 +67,15 @@ pub struct Config {
     )]
     pub ignores: Vec<Regex>,
 
+    /// Regular expressions for the authors of commits to ignore, matched against `Name <email>`. A
+    /// commit is ignored if any part of its author matches one of them.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_ignore_author_patterns",
+        serialize_with = "serialize_patterns"
+    )]
+    pub ignore_authors: Vec<Regex>,
+
     #[serde(default, deserialize_with = "null_as_default")]
     pub parser: ParserConfig,
 
@@ -81,6 +90,7 @@ impl Default for Config {
             default_ignores: default_default_ignores(),
             ignore_merge_commits: default_ignore_merge_commits(),
             ignores: Vec::new(),
+            ignore_authors: Vec::new(),
             parser: ParserConfig::default(),
             rules: RulesConfig::default(),
         }
@@ -131,6 +141,14 @@ impl Config {
             .any(|pattern| pattern.is_match(message))
     }
 
+    /// Return whether commits by the `author`, given as `Name <email>`, are ignored, because it
+    /// matches one of the configured `ignore_authors`.
+    pub fn is_ignored_author(&self, author: &str) -> bool {
+        self.ignore_authors
+            .iter()
+            .any(|pattern| pattern.is_match(author))
+    }
+
     /// Serialize the configuration as YAML, with all settings, including the defaults of omitted
     /// ones, so that the result is a configuration file that is equivalent to this configuration.
     pub fn to_yaml(&self) -> Result<String, serde_saphyr::ser::Error> {
@@ -158,6 +176,13 @@ where
     D: Deserializer<'de>,
 {
     deserialize_patterns(deserializer, "ignore")
+}
+
+fn deserialize_ignore_author_patterns<'de, D>(deserializer: D) -> Result<Vec<Regex>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_patterns(deserializer, "ignore author")
 }
 
 /// Deserialize a list of regular expressions, failing for an invalid one, whose error message
@@ -467,6 +492,33 @@ mod tests {
         let config = parse_config("ignores: ['^WIP']").unwrap();
         assert!(config.is_ignored("WIP: Add a feature"));
         assert!(config.is_ignored("Merge branch 'feature'"));
+    }
+
+    #[test]
+    fn ignores_authors_matching_configured_patterns() {
+        let yaml = r#"
+        ignore_authors:
+          - '^dependabot\[bot\] '
+          - '<.*@bots\.example\.org>$'
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert!(config.is_ignored_author(
+            "dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>"
+        ));
+        assert!(config.is_ignored_author("Release Bot <release@bots.example.org>"));
+        assert!(!config.is_ignored_author("Jane Doe <jane@example.org>"));
+        assert!(!Config::default().is_ignored_author("dependabot[bot] <bot@example.org>"));
+    }
+
+    #[test]
+    fn fails_for_invalid_ignore_author_pattern() {
+        let message = parse_config("ignore_authors: ['(unclosed']")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains("invalid ignore author pattern '(unclosed'"),
+            "{message}"
+        );
     }
 
     #[test]
@@ -986,6 +1038,7 @@ mod tests {
             "default_ignores: true",
             "ignore_merge_commits: true",
             "ignores: []",
+            "ignore_authors: []",
             "footer_detection: last_paragraph",
             "allowed_types:",
             "type_case:",
