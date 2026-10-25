@@ -16,7 +16,7 @@ impl Default for HeaderLength {
 
 impl Rule for HeaderLength {
     fn name(&self) -> &str {
-        "HeaderLength"
+        "header_length"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

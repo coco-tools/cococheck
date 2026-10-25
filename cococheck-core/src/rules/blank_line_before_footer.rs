@@ -7,7 +7,7 @@ pub struct BlankLineBeforeFooter {}
 
 impl Rule for BlankLineBeforeFooter {
     fn name(&self) -> &str {
-        "BlankLineBeforeFooter"
+        "blank_line_before_footer"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {

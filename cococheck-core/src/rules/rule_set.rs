@@ -74,17 +74,35 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "AllowedScopes",
-                "AllowedTypes",
-                "BodyLineLength",
-                "DescriptionCase",
-                "NoDescriptionTerminalPunctuation",
-                "RequiredFooters",
-                "ScopeCase",
-                "ScopePresence",
-                "TypeCase"
+                "allowed_scopes",
+                "allowed_types",
+                "body_line_length",
+                "description_case",
+                "no_description_terminal_punctuation",
+                "required_footers",
+                "scope_case",
+                "scope_presence",
+                "type_case"
             ]
         );
+    }
+
+    #[test]
+    fn rule_names_are_the_config_keys() {
+        let rule_set = RuleSet::new(&Config::default());
+        for (rule, _) in &rule_set.rules {
+            let yaml = format!("rules: {{ {}: {{ enabled: false }} }}", rule.name());
+            let config = parse_config(&yaml).unwrap();
+
+            assert!(
+                RuleSet::new(&config)
+                    .rules
+                    .iter()
+                    .all(|(other, _)| other.name() != rule.name()),
+                "rule '{}' is not disabled by its config key",
+                rule.name()
+            );
+        }
     }
 
     #[test]
@@ -109,21 +127,21 @@ mod tests {
         assert_eq!(
             severities,
             vec![
-                ("AllowedScopes".to_string(), Severity::Error, 0),
-                ("AllowedTypes".to_string(), Severity::Error, 0),
-                ("BlankLineBeforeFooter".to_string(), Severity::Error, 0),
-                ("BodyLineLength".to_string(), Severity::Error, 0),
-                ("DescriptionCase".to_string(), Severity::Error, 0),
-                ("HeaderLength".to_string(), Severity::Warning, 1),
+                ("allowed_scopes".to_string(), Severity::Error, 0),
+                ("allowed_types".to_string(), Severity::Error, 0),
+                ("blank_line_before_footer".to_string(), Severity::Error, 0),
+                ("body_line_length".to_string(), Severity::Error, 0),
+                ("description_case".to_string(), Severity::Error, 0),
+                ("header_length".to_string(), Severity::Warning, 1),
                 (
-                    "NoDescriptionTerminalPunctuation".to_string(),
+                    "no_description_terminal_punctuation".to_string(),
                     Severity::Error,
                     1
                 ),
-                ("RequiredFooters".to_string(), Severity::Error, 0),
-                ("ScopeCase".to_string(), Severity::Error, 0),
-                ("ScopePresence".to_string(), Severity::Error, 0),
-                ("TypeCase".to_string(), Severity::Error, 0),
+                ("required_footers".to_string(), Severity::Error, 0),
+                ("scope_case".to_string(), Severity::Error, 0),
+                ("scope_presence".to_string(), Severity::Error, 0),
+                ("type_case".to_string(), Severity::Error, 0),
             ]
         );
     }

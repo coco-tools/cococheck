@@ -11,7 +11,7 @@ pub struct RequiredFooters {
 
 impl Rule for RequiredFooters {
     fn name(&self) -> &str {
-        "RequiredFooters"
+        "required_footers"
     }
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
