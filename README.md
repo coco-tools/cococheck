@@ -593,6 +593,20 @@ version that contains them. To run the same check locally:
 cargo run -p cococheck-cli -- main..
 ```
 
+### Developer Certificate of Origin
+
+By contributing to this project, you certify that you have the right to submit your contribution
+under the project's license, as described in the
+[Developer Certificate of Origin](https://developercertificate.org/) (DCO). To certify it, add a
+`Signed-off-by` footer with your name and email address to every commit, which Git does when you
+commit with `git commit -s`:
+
+```text
+Signed-off-by: Jane Doe <jane.doe@example.org>
+```
+
+The CI pipeline rejects commits without this footer.
+
 ## License
 
 CoCoCheck is licensed under the [Apache License, Version 2.0](LICENSE).
