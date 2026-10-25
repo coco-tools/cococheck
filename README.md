@@ -62,7 +62,7 @@ error: invalid header: expected ': ' after the type
 
 Commit 2819a1a133fa4e1fcefb08f90c1bb2bb8f675c93 failed:
 
-error[no_description_terminal_punctuation]: Description should not end with terminal punctuation (., !, ?).
+error[no_description_terminal_punctuation]: Description should not end with terminal punctuation '.'.
   |
 1 | fix(api): Handle errors.
   |                        ^
@@ -239,7 +239,7 @@ CoCoCheck then writes a single JSON document to standard output instead of the t
           "severity": "error",
           "violations": [
             {
-              "message": "Description should not end with terminal punctuation (., !, ?).",
+              "message": "Description should not end with terminal punctuation '.'.",
               "span": { "start": 23, "end": 24 }
             }
           ]
@@ -327,6 +327,7 @@ rules:
   no_description_terminal_punctuation:
     enabled: true
     severity: error
+    characters: .!?
   no_trailing_whitespace:
     enabled: true
     severity: error
@@ -607,13 +608,23 @@ Limits the length of the header line. Lengths are counted in Unicode characters,
 
 #### `no_description_terminal_punctuation`
 
-Forbids the description in the header from ending with a period, an exclamation mark, or a
-question mark.
+Forbids the description in the header from ending with one of the configured characters. By
+default, these are a period, an exclamation mark, and a question mark. Every character of
+`characters` is forbidden, for example, to also forbid a comma, a semicolon, and a colon:
 
-| Setting    | Description                                       | Default |
-|------------|---------------------------------------------------|---------|
-| `enabled`  | Whether the rule is applied.                      | `true`  |
-| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
+```yaml
+rules:
+  no_description_terminal_punctuation:
+    characters: ".,;:!?"
+```
+
+As the description is the end of the header, this rule also limits how the header ends.
+
+| Setting      | Description                                         | Default |
+|--------------|-----------------------------------------------------|---------|
+| `enabled`    | Whether the rule is applied.                        | `true`  |
+| `severity`   | Whether a violation is an `error` or a `warning`.   | `error` |
+| `characters` | The characters the description must not end with.   | `.!?`   |
 
 #### `no_trailing_whitespace`
 
