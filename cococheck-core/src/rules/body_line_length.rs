@@ -1,6 +1,5 @@
-use super::{Rule, RuleError};
+use super::{Rule, RuleError, contains_url};
 use crate::parser::ConventionalCommit;
-use regex::regex;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -27,11 +26,9 @@ impl Rule for BodyLineLength {
 
     fn check(&self, commit: &ConventionalCommit) -> Vec<RuleError> {
         let mut errors = Vec::new();
-        // Accept anything that starts like a URL, instead of trying to match only valid URLs.
-        let url_regex = regex!(r"\bhttps?://\S+");
 
         for (i, line) in commit.body_lines.iter().enumerate() {
-            if self.ignore_urls && url_regex.is_match(&line.text) {
+            if self.ignore_urls && contains_url(&line.text) {
                 continue;
             }
 

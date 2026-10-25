@@ -1,4 +1,5 @@
 use crate::parser::ConventionalCommit;
+use regex::regex;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq)]
@@ -39,6 +40,13 @@ pub struct RuleConfig<R> {
 
 fn default_enabled() -> bool {
     true
+}
+
+/// Return whether the `line` contains a URL, for the rules that skip such lines, because long URLs
+/// cannot be wrapped. Accept anything that starts like a URL, instead of trying to match only
+/// valid URLs.
+fn contains_url(line: &str) -> bool {
+    regex!(r"\bhttps?://\S+").is_match(line)
 }
 
 /// Return the byte range of the scope in the full commit message, without the parentheses, or
@@ -82,6 +90,12 @@ pub use body_line_length::BodyLineLength;
 
 mod description_case;
 pub use description_case::{DescriptionCase, DescriptionCaseMode};
+
+mod footer_length;
+pub use footer_length::FooterLength;
+
+mod footer_line_length;
+pub use footer_line_length::FooterLineLength;
 
 mod header_length;
 pub use header_length::HeaderLength;

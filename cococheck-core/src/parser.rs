@@ -20,6 +20,9 @@ pub struct ConventionalCommit {
     /// previous line.
     pub body_lines: Vec<Line>,
     pub footer: Vec<Footer>,
+    /// The lines of the footers with their positions in the full message. Like in `body_lines`, the
+    /// footer paragraphs are separated by a single empty line.
+    pub footer_lines: Vec<Line>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -193,21 +196,26 @@ pub fn parse_conventional_commit(
         )
     };
 
-    let mut body_lines: Vec<Line> = Vec::new();
-    for paragraph in body_paragraphs {
-        if let Some(previous) = body_lines.last() {
-            let end = previous.span.end;
-            body_lines.push(Line {
-                text: String::new(),
-                span: end..end,
-            });
-        }
+    // Join the lines of the paragraphs, separated by a single empty line, whose span is empty and at
+    // the end of the previous line.
+    let paragraph_lines = |paragraphs: &[Vec<&str>]| {
+        let mut lines: Vec<Line> = Vec::new();
+        for paragraph in paragraphs {
+            if let Some(previous) = lines.last() {
+                let end = previous.span.end;
+                lines.push(Line {
+                    text: String::new(),
+                    span: end..end,
+                });
+            }
 
-        body_lines.extend(paragraph.iter().map(|&line| Line {
-            text: line.to_string(),
-            span: line_span(line),
-        }));
-    }
+            lines.extend(paragraph.iter().map(|&line| Line {
+                text: line.to_string(),
+                span: line_span(line),
+            }));
+        }
+        lines
+    };
 
     let mut footers = Vec::new();
     let mut breaking_change_footer_found = false;
@@ -249,8 +257,9 @@ pub fn parse_conventional_commit(
         is_breaking_change: breaking_change_footer_found || caps.name("breaking").is_some(),
         description: caps["desc"].to_string(),
         body,
-        body_lines,
+        body_lines: paragraph_lines(body_paragraphs),
         footer: footers,
+        footer_lines: paragraph_lines(footer_paragraphs),
     })
 }
 
@@ -401,6 +410,7 @@ mod tests {
             body: None,
             body_lines: vec![],
             footer: Vec::new(),
+            footer_lines: vec![],
         };
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
@@ -421,6 +431,7 @@ mod tests {
             body: None,
             body_lines: vec![],
             footer: Vec::new(),
+            footer_lines: vec![],
         };
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
@@ -441,6 +452,7 @@ mod tests {
             body: None,
             body_lines: vec![],
             footer: Vec::new(),
+            footer_lines: vec![],
         };
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
@@ -483,6 +495,11 @@ mod tests {
                 token: "Fixes".to_string(),
                 value: "#123".to_string()
             }],
+            footer_lines: vec![
+                line("BREAKING CHANGE: major update", 127..156),
+                line("Signed-off-by: John Doe <john.doe@example.org>", 157..203),
+                line("Fixes #123", 204..214),
+            ],
         };
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
@@ -521,6 +538,12 @@ mod tests {
                 token: "Signed-off-by".to_string(),
                 value: "John Doe <john.doe@example.org>".to_string()
             }],
+            footer_lines: vec![
+                line("BREAKING CHANGE: This is a long breaking change description", 42..101),
+                line("that spans multiple lines and provides detailed information", 102..161),
+                line("about the change.", 162..179),
+                line("Signed-off-by: John Doe <john.doe@example.org>", 180..226),
+            ],
         };
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
@@ -560,6 +583,10 @@ mod tests {
                     value: "https://example.org/issue/456".to_string(),
                 },
             ],
+            footer_lines: vec![
+                line("[1]: https://example.org/issue/123", 50..84),
+                line("[2]: https://example.org/issue/456", 85..119),
+            ],
         };
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()).unwrap(),
@@ -598,6 +625,10 @@ mod tests {
                     token: "[^2]".to_string(),
                     value: "https://example.org/issue/456".to_string(),
                 },
+            ],
+            footer_lines: vec![
+                line("[^1]: https://example.org/issue/123", 50..85),
+                line("[^2]: https://example.org/issue/456", 86..121),
             ],
         };
         assert_eq!(
@@ -809,6 +840,27 @@ mod tests {
     }
 
     #[test]
+    fn records_spans_of_footer_lines_in_message() {
+        let message =
+            "feat: x\r\n\r\nBody.\r\n\r\nRefs: #1  \r\n  continued\r\n\r\n\r\nFixes #2\r\n";
+
+        let commit = parse_conventional_commit(message, &TRAILING_PARAGRAPHS).unwrap();
+
+        assert_eq!(
+            commit.footer_lines,
+            vec![
+                line("Refs: #1", 20..28),
+                line("  continued", 32..43),
+                line("", 43..43),
+                line("Fixes #2", 49..57),
+            ]
+        );
+        for line in commit.footer_lines {
+            assert_eq!(&message[line.span], line.text);
+        }
+    }
+
+    #[test]
     fn preserves_indentation_in_body() {
         let message = dedent(
             r#"
@@ -885,6 +937,7 @@ mod tests {
                 line("BREAKING CHANGE: major update", 41..70),
             ],
             footer: Vec::new(),
+            footer_lines: vec![],
         };
         assert_eq!(
             parse_conventional_commit(message, &ParserConfig::default()).unwrap(),

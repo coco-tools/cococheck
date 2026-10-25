@@ -26,6 +26,8 @@ impl RuleSet {
         rule_set.add(&rules.body_length);
         rule_set.add(&rules.body_line_length);
         rule_set.add(&rules.description_case);
+        rule_set.add(&rules.footer_length);
+        rule_set.add(&rules.footer_line_length);
         rule_set.add(&rules.header_length);
         rule_set.add(&rules.no_description_terminal_punctuation);
         rule_set.add(&rules.no_trailing_whitespace);
@@ -81,6 +83,8 @@ mod tests {
                 "body_length",
                 "body_line_length",
                 "description_case",
+                "footer_length",
+                "footer_line_length",
                 "no_description_terminal_punctuation",
                 "no_trailing_whitespace",
                 "required_footers",
@@ -137,6 +141,8 @@ mod tests {
                 ("body_length".to_string(), Severity::Error, 0),
                 ("body_line_length".to_string(), Severity::Error, 0),
                 ("description_case".to_string(), Severity::Error, 0),
+                ("footer_length".to_string(), Severity::Error, 0),
+                ("footer_line_length".to_string(), Severity::Error, 0),
                 ("header_length".to_string(), Severity::Warning, 1),
                 (
                     "no_description_terminal_punctuation".to_string(),
