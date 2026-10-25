@@ -27,7 +27,7 @@ pub enum Severity {
 
 /// The configuration of a rule: Whether it is enabled, its severity, and the rule with its own
 /// options, which are flattened into the same YAML mapping as the `enabled` flag.
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RuleConfig<R> {
     #[serde(default = "default_enabled")]
     pub enabled: bool,

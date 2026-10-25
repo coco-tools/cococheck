@@ -41,6 +41,11 @@ struct Cli {
     #[arg(long, value_name = "FILE", conflicts_with_all = ["revisions", "from", "to"])]
     message_file: Option<PathBuf>,
 
+    /// Print the effective configuration as YAML, including the defaults of omitted settings, and
+    /// exit without checking commits
+    #[arg(long, conflicts_with_all = ["revisions", "from", "to", "message_file"])]
+    print_config: bool,
+
     /// The format of the report on standard output
     #[arg(long, value_enum, default_value_t = Format::Text)]
     format: Format,
@@ -90,9 +95,15 @@ fn main() -> ExitCode {
 
 /// Check the commit messages selected by `args`. Return whether all messages passed the checks.
 fn run(args: &Cli) -> anyhow::Result<bool> {
+    let (config, config_path) = load_config_or_default(&args.input, args.config.as_deref())?;
+
+    if args.print_config {
+        print_config(&config, config_path.as_deref())?;
+        return Ok(true);
+    }
+
     info!("Checking Git repository at: {}", args.input.display());
 
-    let config = load_config_or_default(&args.input, args.config.as_deref())?;
     let messages = match &args.message_file {
         Some(path) => vec![read_message_file(&args.input, path)?],
         None => collect_commits(args)?,
@@ -543,34 +554,58 @@ fn parse_error_span(error: &ParseError) -> Option<Range<usize>> {
     }
 }
 
+/// Print the effective `config` as YAML, preceded by a comment that names the file at
+/// `config_path` that it was loaded from, or says that the defaults apply if it is `None`. The
+/// output is a valid configuration file.
+fn print_config(config: &Config, config_path: Option<&Path>) -> anyhow::Result<()> {
+    let yaml = config
+        .to_yaml()
+        .context("failed to serialize the configuration as YAML")?;
+
+    match config_path {
+        Some(path) => println!(
+            "# The effective configuration, loaded from '{}'.",
+            path.display()
+        ),
+        None => {
+            println!(
+                "# The effective configuration. No config file was found, so the defaults apply."
+            )
+        }
+    }
+    print!("{yaml}");
+
+    Ok(())
+}
+
 /// Load the config file at `config_path`, or from the repository at `repo_path` if no path is
 /// given. Use the default configuration if no path is given and the repository does not contain a
 /// config file. An explicitly given config file that does not exist is an error, and so are
-/// multiple config files in the repository.
+/// multiple config files in the repository. Return the configuration with the path of the file it
+/// was loaded from, relative to the repository if it was found there, or `None` if the default
+/// configuration is used.
 fn load_config_or_default(
     repo_path: &Path,
     config_path: Option<&Path>,
-) -> Result<Config, ConfigError> {
+) -> Result<(Config, Option<PathBuf>), ConfigError> {
     if let Some(config_path) = config_path {
         let config = load_config(config_path)?;
         info!("Using config file: {}", config_path.display());
-        return Ok(config);
+        return Ok((config, Some(config_path.to_path_buf())));
     }
 
     let Some(config_path) = find_config(repo_path)? else {
         info!("No config file found, using default configuration.");
-        return Ok(Config::default());
+        return Ok((Config::default(), None));
     };
 
     let config = load_config(&config_path)?;
-    info!(
-        "Using config file: {}",
-        config_path
-            .strip_prefix(repo_path)
-            .unwrap_or(&config_path)
-            .display()
-    );
-    Ok(config)
+    let relative_path = config_path
+        .strip_prefix(repo_path)
+        .unwrap_or(&config_path)
+        .to_path_buf();
+    info!("Using config file: {}", relative_path.display());
+    Ok((config, Some(relative_path)))
 }
 
 #[cfg(test)]
@@ -778,13 +813,29 @@ mod tests {
     fn implicit_config_file_is_loaded_from_the_repository() {
         let result = load_config_or_default(&workspace_root(), None);
 
-        assert!(result.is_ok(), "{result:?}");
+        let (_, path) = result.unwrap();
+        assert_eq!(path, Some(PathBuf::from("cococheck.yml")));
     }
 
     #[test]
     fn missing_implicit_config_file_falls_back_to_the_default() {
         let result = load_config_or_default(&dir_without_config(), None);
 
-        assert!(result.is_ok(), "{result:?}");
+        let (_, path) = result.unwrap();
+        assert_eq!(path, None);
+    }
+
+    #[test]
+    fn print_config_conflicts_with_the_commit_selection() {
+        for args in [
+            &["cococheck", "--print-config", "HEAD"][..],
+            &["cococheck", "--print-config", "--from", "HEAD~1"],
+            &["cococheck", "--print-config", "--to", "HEAD"],
+            &["cococheck", "--print-config", "--message-file", "-"],
+        ] {
+            let error = Cli::try_parse_from(args).unwrap_err();
+
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        }
     }
 }

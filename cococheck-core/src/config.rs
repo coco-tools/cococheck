@@ -5,7 +5,7 @@ use crate::rules::{
     ScopePresence, TypeCase,
 };
 use regex::Regex;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -28,7 +28,7 @@ static DEFAULT_IGNORES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         .collect()
 });
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     /// Whether the messages that Git creates, like merge and revert commits, are ignored.
@@ -37,7 +37,11 @@ pub struct Config {
 
     /// Regular expressions for further messages to ignore. A message is ignored if any part of it
     /// matches one of them.
-    #[serde(default, deserialize_with = "deserialize_patterns")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_patterns",
+        serialize_with = "serialize_patterns"
+    )]
     pub ignores: Vec<Regex>,
 
     #[serde(default, deserialize_with = "null_as_default")]
@@ -78,6 +82,12 @@ impl Config {
             .chain(&self.ignores)
             .any(|pattern| pattern.is_match(message))
     }
+
+    /// Serialize the configuration as YAML, with all settings, including the defaults of omitted
+    /// ones, so that the result is a configuration file that is equivalent to this configuration.
+    pub fn to_yaml(&self) -> Result<String, serde_saphyr::ser::Error> {
+        serde_saphyr::to_string(self)
+    }
 }
 
 fn default_default_ignores() -> bool {
@@ -101,7 +111,15 @@ where
         .collect()
 }
 
-#[derive(Debug, Default, Deserialize)]
+/// Serialize a list of regular expressions as a list of their patterns.
+fn serialize_patterns<S>(patterns: &[Regex], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.collect_seq(patterns.iter().map(Regex::as_str))
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RulesConfig {
     #[serde(default, deserialize_with = "null_as_default")]
@@ -739,5 +757,66 @@ mod tests {
         for path in &paths {
             assert!(message.contains(&path.display().to_string()), "{message}");
         }
+    }
+
+    #[test]
+    fn serialized_config_contains_all_settings() {
+        let yaml = Config::default().to_yaml().unwrap();
+
+        for key in [
+            "default_ignores: true",
+            "ignores: []",
+            "footer_detection: last_paragraph",
+            "allowed_types:",
+            "type_case:",
+            "max_length: 72",
+        ] {
+            assert!(yaml.contains(key), "'{key}' not found in:\n{yaml}");
+        }
+    }
+
+    #[test]
+    fn serialized_config_can_be_parsed_again() {
+        let yaml = r#"
+        default_ignores: false
+        ignores:
+          - '^WIP\b'
+          - '(?m)^\[skip checks\]$'
+          - "it's: # not a comment"
+          - '- not a list'
+        parser:
+          footer_detection: trailing_paragraphs
+        rules:
+          allowed_scopes:
+            scopes: [cli, core]
+          description_case:
+            case: sentence
+          header_length:
+            enabled: false
+            severity: warning
+            max_length: 100
+        "#;
+        let config = parse_config(yaml).unwrap();
+
+        let serialized = config.to_yaml().unwrap();
+        let parsed = parse_config(&serialized).unwrap();
+
+        assert_eq!(parsed.to_yaml().unwrap(), serialized);
+        let patterns = |config: &Config| {
+            config
+                .ignores
+                .iter()
+                .map(|pattern| pattern.as_str().to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(patterns(&parsed), patterns(&config));
+        assert!(!parsed.default_ignores);
+        assert_eq!(
+            parsed.parser.footer_detection,
+            FooterDetection::TrailingParagraphs
+        );
+        assert_eq!(parsed.rules.allowed_scopes, config.rules.allowed_scopes);
+        assert_eq!(parsed.rules.description_case, config.rules.description_case);
+        assert_eq!(parsed.rules.header_length, config.rules.header_length);
     }
 }

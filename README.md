@@ -83,6 +83,8 @@ CoCoCheck finished checking 3 commits.
 | `--to <TO>`             | Last commit to check. The commit itself is checked.          | `HEAD`      |
 | `--message-file <FILE>` | Check the [message in a file](#commit-msg-hook).             |             |
 | `--format <FORMAT>`     | Report as `text` or [`json`](#json-output).                  | `text`      |
+| `--print-config`        | Print the [configuration](#effective-configuration) and exit |             |
+|                         | without checking commits.                                    |             |
 | `-v`, `--verbose`       | Log informational messages, such as passed commits. Give it  |             |
 |                         | twice (`-vv`) to also log debug messages, such as the parsed |             |
 |                         | commits.                                                     |             |
@@ -302,6 +304,21 @@ rules:
     enabled: true
     severity: error
 ```
+
+### Effective configuration
+
+To see which configuration CoCoCheck uses, pass `--print-config`. CoCoCheck then prints the
+configuration as YAML, including the defaults of all omitted settings, and exits without checking
+any commits. A comment in the first line names the file the configuration was loaded from, or says
+that no file was found. The output is a valid configuration file, so it can also be used as a
+starting point for a new one:
+
+```shell
+cococheck --print-config > cococheck.yml
+```
+
+`--print-config` respects `--input` and `--config`, but cannot be combined with the options that
+select the commits to check.
 
 ### Message structure
 
