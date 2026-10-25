@@ -290,6 +290,9 @@ rules:
   no_description_terminal_punctuation:
     enabled: true
     severity: error
+  no_trailing_whitespace:
+    enabled: true
+    severity: error
   required_footers:
     enabled: true
     severity: error
@@ -539,6 +542,22 @@ Limits the length of the header line. Lengths are counted in Unicode characters,
 
 Forbids the description in the header from ending with a period, an exclamation mark, or a
 question mark.
+
+| Setting    | Description                                       | Default |
+|------------|---------------------------------------------------|---------|
+| `enabled`  | Whether the rule is applied.                      | `true`  |
+| `severity` | Whether a violation is an `error` or a `warning`. | `error` |
+
+#### `no_trailing_whitespace`
+
+Forbids spaces, tabs, and other whitespace at the end of any line of the message, in the header,
+the body, and the footers. Lines that only contain whitespace are reported as well. Each violation
+marks the trailing whitespace.
+
+With Git's default cleanup, trailing whitespace is removed before a commit is created, and
+CoCoCheck removes it the same way for a message checked with
+[`--message-file`](#commit-msg-hook). The rule therefore mainly reports commits in the history, or
+messages created with `git commit --cleanup=verbatim`.
 
 | Setting    | Description                                       | Default |
 |------------|---------------------------------------------------|---------|
