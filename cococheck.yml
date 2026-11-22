@@ -3,6 +3,10 @@ ignores:
   # footer. Keep in sync with `pr_name` in release-plz.toml.
   - '^chore: Release( v\S+)?(\n|$)'
 
+ignore_authors:
+  # The commits of Renovate, which are created without a `Signed-off-by` footer.
+  - '^renovate\[bot\] '
+
 rules:
   description_case:
     case: sentence

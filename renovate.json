@@ -1,0 +1,26 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigestsToSemver",
+    ":semanticCommitScopeDisabled",
+    ":semanticCommitTypeAll(deps)",
+    ":maintainLockFilesWeekly"
+  ],
+  "labels": ["dependencies"],
+  "commitMessageLowerCase": "never",
+  "minimumReleaseAge": "7 days",
+  "minimumReleaseAgePackageManagerSync": true,
+  "constraints": {
+    "rust": ">=1.100.0"
+  },
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "The refs of this action are branches that select the Rust version. They cannot be updated like tags, and the version of the MSRV job must stay in sync with `rust-version` in Cargo.toml.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["dtolnay/rust-toolchain"],
+      "enabled": false
+    }
+  ]
+}
