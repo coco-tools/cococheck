@@ -24,13 +24,13 @@ jobs:
       # The tag of the release, or empty if nothing was released.
       tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Fetch the full history, so that release-plz can find the commits of the release.
           fetch-depth: 0
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: release-plz/action@v0.5.148
+      - uses: release-plz/action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
         id: release-plz
         with:
           command: release
@@ -84,12 +84,12 @@ jobs:
       group: release-plz-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - uses: release-plz/action@v0.5.148
+      - uses: release-plz/action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
         with:
           command: release-pr
         env:
