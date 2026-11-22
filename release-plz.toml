@@ -19,6 +19,10 @@ changelog_include = ["cococheck-core"]
 git_tag_enable = true
 git_tag_name = "v{{ version }}"
 git_release_enable = true
+# Create the GitHub release as a draft, because the repository uses immutable releases, which do not
+# allow to add the binaries to a published release. The release workflow publishes the release
+# after it uploaded the binaries.
+git_release_draft = true
 
 [[package]]
 name = "cococheck-core"

@@ -1,17 +1,28 @@
 name: Binaries
 
 on:
-  # Build the binaries and upload them to the release that release-plz creates.
-  release:
-    types: [published]
-  # For all other events, only build the binaries to test the workflow, without uploading them.
+  # Called by the release workflow to build the binaries of a release and to upload them to the
+  # draft of the GitHub release.
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag of the release to build the binaries for and to upload them to.
+        type: string
+        required: true
+  # Only build the binaries to test the workflow, without uploading them.
   pull_request:
     paths:
       - .github/workflows/binaries.yml
       - Cargo.lock
       - Cargo.toml
       - cococheck-core/Cargo.toml
+  # Without a tag, only build the binaries. With a tag, also upload them to the release of the
+  # tag, to repeat a failed upload with a fixed workflow.
   workflow_dispatch:
+    inputs:
+      tag:
+        description: The tag of the release to build the binaries for and to upload them to.
+        type: string
 
 permissions:
   contents: read
@@ -47,6 +58,9 @@ jobs:
             rustflags: -C target-feature=+crt-static
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          # Build the tag of the release, or the default commit of the event if there is no tag.
+          ref: ${{ inputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -64,7 +78,8 @@ jobs:
           locked: true
           include: LICENSE,README.md
           checksum: sha256
-          dry-run: ${{ github.event_name != 'release' }}
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || '' }}
+          dry-run: ${{ !inputs.tag }}
           dry-run-intended: true
         env:
           RUSTFLAGS: ${{ matrix.rustflags }}
