@@ -9,13 +9,16 @@ permissions:
   contents: read
 
 jobs:
-  # Publish the packages to crates.io, and create the Git tag and the GitHub release, when the
-  # release pull request is merged.
+  # Publish the packages to crates.io, and create the Git tag and a draft of the GitHub release,
+  # when the release pull request is merged.
   release:
     name: Release
     runs-on: ubuntu-latest
     # Do not run in forks, which do not have the secrets.
     if: github.repository_owner == 'coco-tools'
+    outputs:
+      # The tag of the release, or empty if nothing was released.
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -24,6 +27,7 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
       - uses: release-plz/action@v0.5.148
+        id: release-plz
         with:
           command: release
         env:
@@ -31,6 +35,42 @@ jobs:
           # the release can trigger other workflows.
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      # The tag and the GitHub release are only created for the `cococheck` package.
+      - name: Get the tag of the release
+        id: tag
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          tag=$(jq --raw-output '.[] | select(.package_name == "cococheck") | .tag' <<< "${RELEASES:-[]}")
+          echo "Released tag: '$tag'"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  # Build the binaries and upload them to the draft of the GitHub release.
+  binaries:
+    name: Binaries
+    needs: release
+    if: needs.release.outputs.tag != ''
+    permissions:
+      # Required to upload the binaries to the release.
+      contents: write
+    uses: ./.github/workflows/binaries.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+
+  # Publish the draft of the GitHub release when all binaries are uploaded. The repository uses
+  # immutable releases, so the binaries cannot be added or changed after this.
+  publish:
+    name: Publish the release
+    needs: [release, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to publish the release.
+      contents: write
+    steps:
+      - run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
 
   # Create or update the release pull request with the new version and the changelog.
   release-pr:
