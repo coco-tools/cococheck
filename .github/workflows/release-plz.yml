@@ -16,6 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     # Do not run in forks, which do not have the secrets.
     if: github.repository_owner == 'coco-tools'
+    permissions:
+      contents: read
+      # Required to request the token for trusted publishing from crates.io.
+      id-token: write
     outputs:
       # The tag of the release, or empty if nothing was released.
       tag: ${{ steps.tag.outputs.tag }}
@@ -34,7 +38,6 @@ jobs:
           # Use a personal access token instead of the token of the workflow, so that the tag and
           # the release can trigger other workflows.
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       # The tag and the GitHub release are only created for the `cococheck` package.
       - name: Get the tag of the release
         id: tag
