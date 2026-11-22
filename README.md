@@ -22,14 +22,20 @@ self-contained, written in Rust and distributed as a single binary with no runti
 
 ## Installation
 
-CoCoCheck requires Rust 1.89 or later. Install the latest version from the Git repository with
-Cargo:
+CoCoCheck requires Rust 1.89 or later. Install the latest release from
+[crates.io](https://crates.io/crates/cococheck) with Cargo:
+
+```shell
+cargo install cococheck
+```
+
+This installs the `cococheck` binary into Cargo's binary directory, usually `~/.cargo/bin`.
+
+To install the development version from the Git repository instead:
 
 ```shell
 cargo install --git https://github.com/coco-tools/cococheck cococheck
 ```
-
-This installs the `cococheck` binary into Cargo's binary directory, usually `~/.cargo/bin`.
 
 To build from source instead, clone the repository and build the release binary:
 
