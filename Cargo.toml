@@ -11,6 +11,9 @@ homepage.workspace = true
 readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
+# Only package what is needed to build and to document the tool, not the other files in the
+# workspace root.
+include = ["/src/**", "/docs/**", "/LICENSE", "/README.md"]
 
 [[bin]]
 name = "cococheck"
