@@ -385,8 +385,9 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-The tests also run on the minimum supported Rust version, 1.89. If a change requires a newer Rust
-version, update `rust-version` in [`Cargo.toml`](Cargo.toml) and the MSRV job in
+The tests run on Linux, macOS, and Windows, and on Linux also with the minimum supported Rust
+version, 1.89. If a change requires a newer Rust version, update `rust-version` in
+[`Cargo.toml`](Cargo.toml) and the MSRV job in
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) together.
 
 Commit messages in this repository follow the Conventional Commits specification. The CI pipeline
