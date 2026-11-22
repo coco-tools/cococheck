@@ -968,7 +968,9 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
+    // Only on Linux, because the file systems of macOS and Windows do not allow file names that are
+    // not valid Unicode.
+    #[cfg(target_os = "linux")]
     #[test]
     fn loads_config_from_path_that_is_not_valid_utf8() {
         use std::os::unix::ffi::OsStrExt;
