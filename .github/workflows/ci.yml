@@ -73,3 +73,11 @@ jobs:
       # version of CoCoCheck, so a change to CoCoCheck only affects the check once it is released
       # and adopted by a new release of the action.
       - uses: coco-tools/cococheck-action@v1.0.0
+
+  renovate:
+    name: Renovate config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      # Use the latest version of Renovate, like the hosted app that runs for the repository.
+      - run: npx --yes --package renovate@latest -- renovate-config-validator renovate.json
