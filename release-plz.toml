@@ -1,0 +1,26 @@
+[workspace]
+# Only release when the release pull request is merged, not on every push to the main branch.
+release_always = false
+# The description starts with an uppercase letter to pass the `description_case` rule of CoCoCheck.
+pr_name = "chore: Release{% if version %} v{{ version }}{% endif %}"
+# Create a single changelog, Git tag, and GitHub release for the whole project. They are enabled
+# for the `cococheck` package below.
+changelog_update = false
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "cococheck"
+version_group = "cococheck"
+changelog_update = true
+changelog_path = "CHANGELOG.md"
+# Changes to the library are also changes to the tool.
+changelog_include = ["cococheck-core"]
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
+git_release_enable = true
+
+[[package]]
+name = "cococheck-core"
+# Always release both packages with the same version.
+version_group = "cococheck"
