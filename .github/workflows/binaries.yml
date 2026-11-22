@@ -1,0 +1,84 @@
+name: Binaries
+
+on:
+  # Build the binaries and upload them to the release that release-plz creates.
+  release:
+    types: [published]
+  # For all other events, only build the binaries to test the workflow, without uploading them.
+  pull_request:
+    paths:
+      - .github/workflows/binaries.yml
+      - Cargo.lock
+      - Cargo.toml
+      - cococheck-core/Cargo.toml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      # Required to upload the binaries to the release.
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The Linux binaries are built for musl instead of glibc, so that they are statically
+          # linked and run on any distribution.
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            # Link the C runtime statically, so that the binary does not depend on the Visual C++
+            # Redistributable.
+            rustflags: -C target-feature=+crt-static
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      # The C compiler for musl, which is required to build libgit2 and zlib.
+      - name: Install musl-tools
+        if: endsWith(matrix.target, '-linux-musl')
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools
+      - uses: taiki-e/upload-rust-binary-action@v1.30.2
+        with:
+          bin: cococheck
+          target: ${{ matrix.target }}
+          # Always build with Cargo. By default, the action builds with cross if the target is not
+          # the default target of the runner, which is the case for musl.
+          build-tool: cargo
+          locked: true
+          include: LICENSE,README.md
+          checksum: sha256
+          dry-run: ${{ github.event_name != 'release' }}
+          dry-run-intended: true
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+      - name: Check that the Linux binary is statically linked
+        if: endsWith(matrix.target, '-linux-musl')
+        run: |
+          if readelf --dynamic "target/${{ matrix.target }}/release/cococheck" | grep NEEDED; then
+            echo "::error::The binary depends on shared libraries."
+            exit 1
+          fi
+      # Run the binary, including the code that uses libgit2. The x86_64 binary for macOS runs on
+      # the aarch64 runner with Rosetta.
+      - name: Test the binary
+        shell: bash
+        run: |
+          "target/${{ matrix.target }}/release/cococheck" --version
+          "target/${{ matrix.target }}/release/cococheck" HEAD
