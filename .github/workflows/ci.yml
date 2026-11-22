@@ -69,6 +69,7 @@ jobs:
           # Fetch the full history, so that the commits to check can be found.
           fetch-depth: 0
       # Check the new commits of a pull request, or the commits pushed to main, which can differ
-      # from the commits of the pull request, e.g. for a squash merge. The action builds CoCoCheck
-      # from the main branch, so a change to CoCoCheck only affects the check once it is merged.
-      - uses: coco-tools/cococheck-action@main
+      # from the commits of the pull request, e.g. for a squash merge. The action uses a released
+      # version of CoCoCheck, so a change to CoCoCheck only affects the check once it is released
+      # and adopted by a new release of the action.
+      - uses: coco-tools/cococheck-action@v1.0.0
