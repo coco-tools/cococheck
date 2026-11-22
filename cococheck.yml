@@ -1,3 +1,8 @@
+ignores:
+  # The commit of the release pull request, which release-plz creates without a `Signed-off-by`
+  # footer. Keep in sync with `pr_name` in release-plz.toml.
+  - '^chore: Release( v\S+)?(\n|$)'
+
 rules:
   description_case:
     case: sentence
