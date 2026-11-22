@@ -63,14 +63,7 @@ jobs:
         with:
           # Fetch the full history, so that the commits to check can be found.
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      # Also running on pushes to main saves the cache there, where pull requests can restore it.
-      - uses: Swatinem/rust-cache@v2.9.3
-      # Check the new commits with the CoCoCheck version that contains them. For a pull request,
-      # use its head commit instead of the checked out merge commit that GitHub creates. For a push
-      # to main, check the pushed commits, which can differ from the commits of the pull request,
-      # e.g. for a squash merge.
-      - run: cargo run -p cococheck -- --from "$FROM" --to "$TO"
-        env:
-          FROM: ${{ github.event.pull_request.base.sha || github.event.before }}
-          TO: ${{ github.event.pull_request.head.sha || github.sha }}
+      # Check the new commits of a pull request, or the commits pushed to main, which can differ
+      # from the commits of the pull request, e.g. for a squash merge. The action builds CoCoCheck
+      # from the main branch, so a change to CoCoCheck only affects the check once it is merged.
+      - uses: coco-tools/cococheck-action@main
