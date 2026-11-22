@@ -1,0 +1,55 @@
+name: Release-plz
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  # Publish the packages to crates.io, and create the Git tag and the GitHub release, when the
+  # release pull request is merged.
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    # Do not run in forks, which do not have the secrets.
+    if: github.repository_owner == 'coco-tools'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # Fetch the full history, so that release-plz can find the commits of the release.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: release-plz/action@v0.5.148
+        with:
+          command: release
+        env:
+          # Use a personal access token instead of the token of the workflow, so that the tag and
+          # the release can trigger other workflows.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # Create or update the release pull request with the new version and the changelog.
+  release-pr:
+    name: Release pull request
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'coco-tools'
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: release-plz/action@v0.5.148
+        with:
+          command: release-pr
+        env:
+          # Use a personal access token instead of the token of the workflow, so that the CI
+          # workflow runs for the release pull request.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
