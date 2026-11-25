@@ -23,7 +23,7 @@ struct Cli {
 
     /// Path to the config file (default: cococheck.yml or .cococheck.yml in the repository, if it
     /// exists, or the same with the .yaml extension)
-    #[arg(short, long)]
+    #[arg(short, long, value_name = "PATH")]
     config: Option<PathBuf>,
 
     /// Check only this commit, or the commits in a range like A..B, as in `git show` (default: all
