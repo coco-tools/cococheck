@@ -108,7 +108,8 @@ Independent of the configured rules, every commit message must have a valid Conv
 header of the form `type(scope)!: description`, where the scope and the `!` are optional. If the
 message has a body, the header must be followed by a blank line. A commit that does not meet
 these requirements fails with a parse error, and no rules are applied to it. Commits that are
-[ignored](#ignored-commits) are not checked at all.
+[ignored](#ignored-commits) are neither parsed nor checked by the rules, but they still fail if
+they match a [forbidden pattern](#forbidden-commits).
 
 ## Ignored commits
 
