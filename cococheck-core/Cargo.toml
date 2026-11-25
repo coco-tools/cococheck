@@ -14,7 +14,7 @@ categories.workspace = true
 
 [dependencies]
 git2 = { workspace = true }
-regex = "1.13.1"
+regex = "1.13.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde-saphyr = { version = "2.2.0", default-features = false, features = ["deserialize", "serialize"] }
 thiserror = "2.0.21"
