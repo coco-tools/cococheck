@@ -268,11 +268,17 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
         _ => info!("Using all commits up to {to} ({})", range.to),
     }
 
+    let total = range.commits.len();
     let messages = range
         .commits
         .into_iter()
-        .map(|commit| Message {
-            name: format!("Commit {}", commit_label(&commit.short_id, &commit.message)),
+        .enumerate()
+        .map(|(index, commit)| Message {
+            name: format!(
+                "Commit {}/{total} {}",
+                index + 1,
+                commit_label(&commit.short_id, &commit.message)
+            ),
             id: Some(commit.id),
             text: commit.message,
             is_merge: commit.is_merge,

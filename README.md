@@ -88,14 +88,14 @@ CoCoCheck parses each commit message, applies the enabled [rules](docs/rules.md)
 commit that fails:
 
 ```text
-Commit 00e0da6 "Update stuff." failed to parse:
+Commit 1/3 00e0da6 "Update stuff." failed to parse:
 
 error: invalid header: expected ': ' after the type
   |
 1 | Update stuff.
   |       ^
 
-Commit 2819a1a "fix(api): Handle errors." failed:
+Commit 3/3 2819a1a "fix(api): Handle errors." failed:
 
 error[no_description_terminal_punctuation]: Description should not end with terminal punctuation '.'.
   |
@@ -262,7 +262,7 @@ Each rule violation is reported with the name of the rule, as used in the
 offending part:
 
 ```text
-Commit 82074ea "docs: Describe the body rules" failed:
+Commit 1/1 82074ea "docs: Describe the body rules" failed:
 
 error[body_line_length]: Body line 2 exceeds maximum length of 72 characters (actual: 82).
   |
@@ -273,7 +273,7 @@ error[body_line_length]: Body line 2 exceeds maximum length of 72 characters (ac
 A commit that cannot be parsed is reported the same way, with a snippet that marks the problem:
 
 ```text
-Commit c5d6497 "feat(): Add a new feature" failed to parse:
+Commit 1/1 c5d6497 "feat(): Add a new feature" failed to parse:
 
 error: invalid header: the scope must not be empty
   |

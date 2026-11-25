@@ -199,7 +199,7 @@ forbidden:
 ```
 
 ```text
-Commit 2d2ab0e "fixup! feat: Add a feature" failed:
+Commit 1/1 2d2ab0e "fixup! feat: Add a feature" failed:
 
 error: Message matches the forbidden pattern '^(amend|fixup|squash)! '.
   |
