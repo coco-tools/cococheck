@@ -33,6 +33,9 @@ git_release_draft = true
 name = "cococheck-core"
 # Always release both packages with the same version.
 version_group = "cococheck"
+# The library is an internal part of CoCoCheck without stability guarantees for its API, so do not
+# report breaking changes of the API with cargo-semver-checks in the release pull request.
+semver_check = false
 
 [changelog]
 # Only add the commits that matter to users of CoCoCheck to the changelog, grouped by their type.
