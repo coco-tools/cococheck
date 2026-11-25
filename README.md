@@ -428,8 +428,9 @@ version, 1.89. If a change requires a newer Rust version, update `rust-version` 
 
 Commit messages in this repository follow the Conventional Commits specification. The CI pipeline
 checks the commits of every pull request, and the commits pushed to `main`, with the
-[CoCoCheck action](https://github.com/coco-tools/cococheck-action), which uses the CoCoCheck version
-from the `main` branch. To run the check locally with the version of your branch:
+[CoCoCheck action](https://github.com/coco-tools/cococheck-action), which uses a released version of
+CoCoCheck. A change to CoCoCheck only affects this check once it is released and adopted by a new
+release of the action. To run the check locally with the version of your branch:
 
 ```shell
 cargo run -p cococheck -- main..
