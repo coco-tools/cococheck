@@ -272,7 +272,7 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
         .commits
         .into_iter()
         .map(|commit| Message {
-            name: format!("Commit {}", commit.id),
+            name: format!("Commit {}", commit_label(&commit.short_id, &commit.message)),
             id: Some(commit.id),
             text: commit.message,
             is_merge: commit.is_merge,
@@ -281,6 +281,28 @@ fn collect_commits(args: &Cli) -> anyhow::Result<Vec<Message>> {
         .collect();
 
     Ok(messages)
+}
+
+/// The maximum number of characters of a commit title that is shown in the name of a commit.
+const MAX_TITLE_CHARS: usize = 72;
+
+/// Return a label that lets a human recognize a commit, made of the `short_id` and the title of the
+/// commit `message`, which is cropped to [`MAX_TITLE_CHARS`] characters.
+fn commit_label(short_id: &str, message: &str) -> String {
+    let title = message.lines().next().unwrap_or_default().trim();
+    if title.is_empty() {
+        return short_id.to_string();
+    }
+
+    let title = match title.char_indices().nth(MAX_TITLE_CHARS) {
+        Some(_) => {
+            let (end, _) = title.char_indices().nth(MAX_TITLE_CHARS - 1).unwrap();
+            format!("{}…", title[..end].trim_end())
+        }
+        None => title.to_string(),
+    };
+
+    format!("{short_id} \"{title}\"")
 }
 
 /// Read the commit message from the file at `path`, or from standard input if the path is `-`, and
@@ -789,6 +811,42 @@ mod tests {
             is_merge: false,
             author: None,
         }
+    }
+
+    #[test]
+    fn commit_label_contains_the_short_id_and_the_title() {
+        assert_eq!(
+            commit_label("1a2b3c4", "feat: Add a feature\n\nSome body.\n"),
+            "1a2b3c4 \"feat: Add a feature\""
+        );
+    }
+
+    #[test]
+    fn commit_label_crops_long_titles() {
+        let title = "feat: Add a feature with a title that is much too long to show it in full in the report";
+        assert_eq!(
+            commit_label("1a2b3c4", title),
+            "1a2b3c4 \"feat: Add a feature with a title that is much too long to show it in fu…\""
+        );
+
+        let exact = "x".repeat(MAX_TITLE_CHARS);
+        assert_eq!(
+            commit_label("1a2b3c4", &exact),
+            format!("1a2b3c4 \"{exact}\"")
+        );
+    }
+
+    #[test]
+    fn commit_label_crops_titles_at_character_boundaries() {
+        let title = "ä".repeat(MAX_TITLE_CHARS + 1);
+        let expected = format!("1a2b3c4 \"{}…\"", "ä".repeat(MAX_TITLE_CHARS - 1));
+        assert_eq!(commit_label("1a2b3c4", &title), expected);
+    }
+
+    #[test]
+    fn commit_label_omits_an_empty_title() {
+        assert_eq!(commit_label("1a2b3c4", ""), "1a2b3c4");
+        assert_eq!(commit_label("1a2b3c4", "  \nbody"), "1a2b3c4");
     }
 
     #[test]

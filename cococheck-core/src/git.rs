@@ -8,6 +8,8 @@ use std::process::Command;
 #[derive(Debug, PartialEq)]
 pub struct CommitInfo {
     pub id: String,
+    /// The shortest unique abbreviation of the ID, at least as long as configured by `core.abbrev`.
+    pub short_id: String,
     pub message: String,
     /// Whether the commit is a merge commit, which has more than one parent.
     pub is_merge: bool,
@@ -286,6 +288,12 @@ fn commits_between(
 fn commit_info(commit: &Commit) -> CommitInfo {
     CommitInfo {
         id: commit.id().to_string(),
+        short_id: commit
+            .as_object()
+            .short_id()
+            .ok()
+            .and_then(|buf| buf.as_str().ok().map(str::to_string))
+            .unwrap_or_else(|| commit.id().to_string()),
         message: String::from_utf8_lossy(commit.message_bytes()).into_owned(),
         is_merge: commit.parent_count() > 1,
         author: format!(
@@ -610,6 +618,7 @@ mod tests {
             range.commits,
             vec![CommitInfo {
                 id: oids[0].to_string(),
+                short_id: oids[0].to_string()[..7].to_string(),
                 message: "first".to_string(),
                 is_merge: false,
                 author: "Test <test@example.org>".to_string(),
