@@ -11,7 +11,7 @@ Releases are automated with [release-plz](https://release-plz.dev/), configured 
   which always have the same version,
 - a Git tag `v<version>`,
 - a [GitHub release](https://github.com/coco-tools/cococheck/releases) with the changes of the
-  release and the [prebuilt binaries](../README.md#prebuilt-binaries),
+  release and the [prebuilt binaries](installation.md#prebuilt-binaries),
 - a new section in the [`CHANGELOG.md`](../CHANGELOG.md).
 
 ## Release pull request

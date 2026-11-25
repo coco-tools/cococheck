@@ -153,7 +153,7 @@ Merge commits, which have more than one parent, are also ignored regardless of t
 that a merge commit with a custom message, for example from `git merge -m`, does not fail the
 checks. To check their messages, set `ignore_merge_commits` to `false`; merge commits whose message
 matches one of the patterns above are still ignored. In the
-[`commit-msg` hook](../README.md#commit-msg-hook), the commit does not exist yet, so
+[`commit-msg` hook](hooks.md), the commit does not exist yet, so
 `ignore_merge_commits` does not apply, but the default message of `git merge` is ignored by
 `default_ignores`.
 
@@ -169,7 +169,7 @@ ignore_authors:
   - '^renovate\[bot\] '
 ```
 
-In the [`commit-msg` hook](../README.md#commit-msg-hook), the commit does not exist yet, so
+In the [`commit-msg` hook](hooks.md), the commit does not exist yet, so
 CoCoCheck determines its author with `git var GIT_AUTHOR_IDENT`. Like Git, this respects the
 `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` environment variables and the `author.*` and `user.*`
 settings. `git commit` passes the author to its hooks in these variables, so the `--author` option
@@ -208,7 +208,7 @@ error: Message matches the forbidden pattern '^(amend|fixup|squash)! '.
   | ^^^^^^^
 ```
 
-The forbidden patterns also apply to the [`commit-msg` hook](../README.md#commit-msg-hook), so
+The forbidden patterns also apply to the [`commit-msg` hook](hooks.md), so
 forbidding fixup commits prevents creating them. To forbid them only in CI, keep them in a separate
 configuration file that is passed with `--config` in CI.
 
