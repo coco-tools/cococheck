@@ -20,7 +20,11 @@ On every push to `main`, release-plz creates or updates a pull request titled
 `chore: Release v<version>`. It bumps the version in `Cargo.toml` and `Cargo.lock`, and adds the
 changes since the last release to the changelog. The version is derived from the commits following
 [Semantic Versioning](https://semver.org/): before 1.0, a breaking change bumps the minor version,
-and all other changes bump the patch version.
+and all other changes bump the patch version. Changes to the API of `cococheck-core` are not
+considered, because the crate is an internal part of CoCoCheck whose API has no stability
+guarantees, as its [README](../cococheck-core/README.md) says. Therefore, release-plz does not check
+it for breaking API changes with
+[cargo-semver-checks](https://github.com/obi1kenobi/cargo-semver-checks).
 
 Only the commits that matter to users of CoCoCheck lead to a release pull request, and only they
 are added to the changelog:
