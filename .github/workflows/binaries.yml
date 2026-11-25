@@ -9,13 +9,12 @@ on:
         description: The tag of the release to build the binaries for and to upload them to.
         type: string
         required: true
-  # Only build the binaries to test the workflow, without uploading them.
+  # Only build the binaries to test the build, without uploading them. This runs for every pull
+  # request, because the build jobs are required status checks of the main branch, and a pull
+  # request cannot be merged if they do not run.
   pull_request:
-    paths:
-      - .github/workflows/binaries.yml
-      - Cargo.lock
-      - Cargo.toml
-      - cococheck-core/Cargo.toml
+    branches:
+      - main
   # Without a tag, only build the binaries. With a tag, also upload them to the release of the
   # tag, to repeat a failed upload with a fixed workflow.
   workflow_dispatch:
