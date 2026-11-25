@@ -4,8 +4,8 @@ CoCoCheck reads its configuration from a file in the root of the repository bein
 `cococheck.yml`, or `.cococheck.yml` to keep it hidden. The `.yaml` extension works as well. If
 there is no such file, the defaults described below apply. If there is more than one, CoCoCheck
 fails with an error instead of picking one. Every section and setting is optional; omitted values
-keep their defaults. Unknown keys are rejected, so a typo in a rule name causes an error instead of
-being silently ignored.
+keep their defaults. Unknown keys are rejected, so a typo in a rule name or a setting causes an
+error instead of being silently ignored.
 
 The following file sets every option to its default value:
 

@@ -956,6 +956,48 @@ mod tests {
     }
 
     #[test]
+    fn fails_for_unknown_option_of_rule() {
+        let yaml = r#"
+        rules:
+          header_length:
+            max_lenght: 50
+        "#;
+        let error = parse_config(yaml).unwrap_err().to_string();
+        assert!(
+            error.contains(
+                "unknown option `max_lenght`, expected one of `enabled`, `severity`, `max_length`"
+            ),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn fails_for_unknown_option_of_rule_without_options() {
+        let yaml = r#"
+        rules:
+          type_case:
+            severity: warning
+            case: lower
+        "#;
+        assert!(matches!(parse_config(yaml), Err(ConfigError::Parse { .. })));
+    }
+
+    #[test]
+    fn reads_common_and_rule_options_in_any_order() {
+        let yaml = r#"
+        rules:
+          header_length:
+            max_length: 50
+            severity: warning
+            enabled: false
+        "#;
+        let config = parse_config(yaml).unwrap();
+        assert!(!config.rules.header_length.enabled);
+        assert_eq!(config.rules.header_length.severity, Severity::Warning);
+        assert_eq!(config.rules.header_length.rule.max_length, 50);
+    }
+
+    #[test]
     fn read_default_value_for_empty_rule() {
         let yaml = r#"
         rules:
