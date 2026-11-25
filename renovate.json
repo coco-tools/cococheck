@@ -17,6 +17,11 @@
   "rangeStrategy": "bump",
   "packageRules": [
     {
+      "description": "Updates of GitHub Actions only change the CI. Use the `ci` type for them instead of `deps`, so that they are not added to the changelog.",
+      "matchManagers": ["github-actions"],
+      "semanticCommitType": "ci"
+    },
+    {
       "description": "The refs of this action are branches that select the Rust version. They cannot be updated like tags, and the version of the MSRV job must stay in sync with `rust-version` in Cargo.toml.",
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["dtolnay/rust-toolchain"],
