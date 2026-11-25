@@ -143,13 +143,27 @@ fn main() -> ExitCode {
         })
         .init();
 
-    match run(&args) {
+    let result = run(&args);
+    if let Err(e) = &result {
+        eprintln!("error: {:#}", e);
+    }
+    exit_code(&result)
+}
+
+/// The exit status if any commit failed the checks.
+const EXIT_FAILED: u8 = 1;
+
+/// The exit status if an error occurred. clap uses the same status for invalid arguments.
+const EXIT_ERROR: u8 = 2;
+
+/// Return the exit status for the `result` of [run]: `0` if all commits passed, [EXIT_FAILED] if
+/// any commit failed, and [EXIT_ERROR] if an error occurred, so that a caller can tell failed
+/// commits apart from errors.
+fn exit_code(result: &anyhow::Result<bool>) -> ExitCode {
+    match result {
         Ok(true) => ExitCode::SUCCESS,
-        Ok(false) => ExitCode::FAILURE,
-        Err(e) => {
-            eprintln!("error: {:#}", e);
-            ExitCode::FAILURE
-        }
+        Ok(false) => ExitCode::from(EXIT_FAILED),
+        Err(_) => ExitCode::from(EXIT_ERROR),
     }
 }
 
@@ -853,6 +867,19 @@ mod tests {
     fn commit_label_omits_an_empty_title() {
         assert_eq!(commit_label("1a2b3c4", ""), "1a2b3c4");
         assert_eq!(commit_label("1a2b3c4", "  \nbody"), "1a2b3c4");
+    }
+
+    #[test]
+    fn exit_code_tells_failed_commits_apart_from_errors() {
+        assert_eq!(exit_code(&Ok(true)), ExitCode::SUCCESS);
+        assert_eq!(exit_code(&Ok(false)), ExitCode::from(1));
+        assert_eq!(exit_code(&Err(anyhow::anyhow!("error"))), ExitCode::from(2));
+    }
+
+    #[test]
+    fn exit_code_for_errors_matches_clap() {
+        let error = Cli::try_parse_from(["cococheck", "--unknown"]).unwrap_err();
+        assert_eq!(error.exit_code(), i32::from(EXIT_ERROR));
     }
 
     #[test]

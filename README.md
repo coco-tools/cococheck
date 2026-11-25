@@ -347,10 +347,17 @@ The example shows only one rule; the report lists every enabled rule.
 
 The exit status is the same as for the text report.
 
-CoCoCheck exits with status `0` if all commits pass, and with status `1` if any commit fails or an
-error occurs, for example because the repository or a revision cannot be found. Violations of rules
-with the severity [`warning`](docs/rules.md) are reported, but do not cause a commit to fail, unless
-`--deny-warnings` is given. This makes it suitable for use in CI pipelines and Git hooks.
+CoCoCheck exits with one of the following statuses, so that CI pipelines and Git hooks can tell
+failed commits apart from errors:
+
+| Status | Meaning                                                                                       |
+|--------|-----------------------------------------------------------------------------------------------|
+| `0`    | All commits passed the checks.                                                                |
+| `1`    | At least one commit failed the checks.                                                        |
+| `2`    | An error occurred, for example because of invalid arguments, an invalid configuration, or a repository or a revision that cannot be found. |
+
+Violations of rules with the severity [`warning`](docs/rules.md) are reported, but do not cause a
+commit to fail, unless `--deny-warnings` is given.
 
 ## Configuration
 
