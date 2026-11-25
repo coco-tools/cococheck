@@ -1,6 +1,11 @@
 [workspace]
 # Only release when the release pull request is merged, not on every push to the main branch.
 release_always = false
+# Only create a release pull request if there is a commit that matters to users of CoCoCheck: a
+# feature, a fix, a performance improvement, a revert, a dependency update, which can fix a bug or a
+# vulnerability, or a breaking change of any type, which is marked with `!` or a `BREAKING CHANGE`
+# footer.
+release_commits = '^(feat|fix|perf|revert|deps)(\(.+\))?!?:|^\w+(\(.+\))?!:|(?m)^BREAKING[ -]CHANGE:'
 # The description starts with an uppercase letter to pass the `description_case` rule of CoCoCheck.
 pr_name = "chore: Release{% if version %} v{{ version }}{% endif %}"
 # Create a single changelog, Git tag, and GitHub release for the whole project. They are enabled
@@ -28,3 +33,26 @@ git_release_draft = true
 name = "cococheck-core"
 # Always release both packages with the same version.
 version_group = "cococheck"
+
+[changelog]
+# Only add the commits that matter to users of CoCoCheck to the changelog, grouped by their type.
+# The groups are sorted alphabetically, so the name of the group for the dependency updates is
+# chosen to be the last one.
+commit_parsers = [
+    { message = '^feat(\(.+\))?!?:', group = "added" },
+    { message = '^fix(\(.+\))?!?:', group = "fixed" },
+    { message = '^perf(\(.+\))?!?:', group = "performance" },
+    # Updates of the Rust crates, which are part of the released binaries. Renovate uses the `ci`
+    # type for updates of GitHub Actions.
+    { message = '^deps(\(.+\))?:', group = "updated dependencies" },
+    # Breaking changes of all other types.
+    { message = '^\w+(\(.+\))?!:', group = "changed" },
+    { footer = '^BREAKING[ -]CHANGE:', group = "changed" },
+    # Changes to the build, the CI, the documentation, and the code that do not change the behavior
+    # of CoCoCheck.
+    { message = '^(build|chore|ci|docs|refactor|style|test)(\(.+\))?:', skip = true },
+    # All other commits, like reverts.
+    { message = '^.*', group = "changed" },
+]
+# Never skip a commit with a breaking change, even if it is not recognized by the parsers above.
+protect_breaking_commits = true
