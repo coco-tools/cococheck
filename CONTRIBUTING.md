@@ -46,12 +46,12 @@ cargo run -p cococheck -- main..
 The repository is a Cargo workspace with two crates:
 
 - The root directory contains the `cococheck` package with the command-line tool. It is in the
-  root, so that [pre-commit](README.md#hook-managers) can install it from the repository.
+  root, so that [pre-commit](docs/hooks.md#hook-managers) can install it from the repository.
 - [`cococheck-core`](cococheck-core) contains the commit message parser, the configuration, and the
   rules.
 
-The [`docs`](docs) directory contains the reference of the configuration and the rules, and the
-description of the [release process](docs/releasing.md) for maintainers.
+The [`docs`](docs) directory contains the user documentation, and the description of the
+[release process](docs/releasing.md) for maintainers.
 
 ## Developer Certificate of Origin
 

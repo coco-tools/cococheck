@@ -20,9 +20,9 @@ rules:
 Warnings are reported like errors, but a commit that only has warnings passes, and CoCoCheck still
 exits with status `0`.
 
-To keep warnings advisory in the [`commit-msg` hook](../README.md#commit-msg-hook), but enforce them
+To keep warnings advisory in the [`commit-msg` hook](hooks.md), but enforce them
 in CI, pass `--deny-warnings` in CI. A commit with warnings then fails: It is reported as failed,
-with an outcome of `failed` in the [JSON output](../README.md#json-output), and CoCoCheck exits with
+with an outcome of `failed` in the [JSON output](usage.md#json-output), and CoCoCheck exits with
 status `1`. The violations are still reported as warnings.
 
 The following rules are available:
@@ -248,7 +248,7 @@ the body, and the footers. Lines that only contain whitespace are reported as we
 marks the trailing whitespace.
 
 With Git's default cleanup, trailing whitespace is removed before a commit is created, and CoCoCheck
-removes it the same way for a message checked with [`--message-file`](../README.md#commit-msg-hook).
+removes it the same way for a message checked with [`--message-file`](hooks.md#checking-a-message-file).
 The rule therefore mainly reports commits in the history, or messages created with
 `git commit --cleanup=verbatim`.
 
