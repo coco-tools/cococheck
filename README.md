@@ -1,6 +1,9 @@
 # CoCoCheck
 
 [![CI](https://github.com/coco-tools/cococheck/actions/workflows/ci.yml/badge.svg)](https://github.com/coco-tools/cococheck/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/cococheck.svg)](https://crates.io/crates/cococheck)
+[![MSRV](https://img.shields.io/crates/msrv/cococheck.svg)](Cargo.toml)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 CoCoCheck checks that the commit messages in a Git repository follow the
