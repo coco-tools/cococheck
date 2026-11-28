@@ -72,7 +72,7 @@ jobs:
       # from the commits of the pull request, e.g. for a squash merge. The action uses a released
       # version of CoCoCheck, so a change to CoCoCheck only affects the check once it is released
       # and adopted by a new release of the action.
-      - uses: coco-tools/cococheck-action@1933ce1c0eec31cd362182e1acd5d3601e2d834b # v1.0.1
+      - uses: coco-tools/cococheck-action@d53306a8f1e84727891cc4d3d52f0b1bfd9052a6 # v1.0.2
 
   renovate:
     name: Renovate config
