@@ -176,7 +176,8 @@ CoCoCheck then writes a single JSON document to standard output instead of the t
 }
 ```
 
-The example shows only one rule; the report lists every enabled rule.
+The example shows only one rule; the report lists every enabled rule, except for the rules that
+[ignore the commit](rules.md#ignoring-commits-for-a-rule).
 
 | Field                         | Description                                                                                                                       |
 |-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
@@ -186,7 +187,7 @@ The example shows only one rule; the report lists every enabled rule.
 | `commits[].outcome`           | `passed`, `passed_with_warnings`, `failed`, or `ignored`.                                                                         |
 | `commits[].forbidden_pattern` | Why the message matches a [forbidden pattern](configuration.md#forbidden-commits), with a `message` and a `span`, or `null`. |
 | `commits[].parse_error`       | Why the message could not be parsed, with a `message` and a `span`, or `null`. No rules are applied if it is set.                 |
-| `commits[].rules`             | The results of all enabled rules, or an empty list if the commit is ignored, matches a forbidden pattern, or could not be parsed. |
+| `commits[].rules`             | The results of the enabled rules that check the commit, or an empty list if it is ignored, forbidden, or could not be parsed.     |
 | `rules[].rule`                | The name of the rule, as used in the configuration.                                                                               |
 | `rules[].severity`            | The configured severity of the rule, `error` or `warning`.                                                                        |
 | `rules[].violations`          | The violations of the rule, each with a `message` and a `span`. The rule passed if the list is empty.                             |

@@ -1,10 +1,28 @@
 use crate::config::Config;
 use crate::parser::ConventionalCommit;
+use crate::pattern::Patterns;
 use crate::rules::{Rule, RuleConfig, RuleError, Severity};
 
 pub struct RuleSet {
-    /// The enabled rules with their configured severities.
-    pub rules: Vec<(Box<dyn Rule>, Severity)>,
+    /// The enabled rules.
+    pub rules: Vec<EnabledRule>,
+}
+
+/// An enabled rule with its configured severity and the commits that it does not check.
+pub struct EnabledRule {
+    pub rule: Box<dyn Rule>,
+    pub severity: Severity,
+    pub ignores: Patterns,
+    pub ignore_authors: Patterns,
+}
+
+impl EnabledRule {
+    /// Return whether the rule does not check the commit with the `message` and the `author`, given
+    /// as `Name <email>`, because they match one of the `ignores` or `ignore_authors` of the rule.
+    pub fn is_ignored(&self, message: &str, author: Option<&str>) -> bool {
+        self.ignores.matches_message(message)
+            || author.is_some_and(|author| self.ignore_authors.matches_author(author))
+    }
 }
 
 /// The result of checking a commit with a single rule.
@@ -41,18 +59,37 @@ impl RuleSet {
 
     fn add<R: Rule + Clone + 'static>(&mut self, config: &RuleConfig<R>) {
         if config.enabled {
-            self.rules
-                .push((Box::new(config.rule.clone()), config.severity));
+            self.rules.push(EnabledRule {
+                rule: Box::new(config.rule.clone()),
+                severity: config.severity,
+                ignores: config.ignores.clone(),
+                ignore_authors: config.ignore_authors.clone(),
+            });
         }
     }
 
-    pub fn check_commit(&self, commit: &ConventionalCommit) -> Vec<RuleResult> {
+    /// Return whether any of the rules ignores commits by their author, so that the author of a
+    /// commit must be known to check it.
+    pub fn ignores_authors(&self) -> bool {
         self.rules
             .iter()
-            .map(|(rule, severity)| RuleResult {
-                rule_name: rule.name().to_string(),
-                severity: *severity,
-                errors: rule.check(commit),
+            .any(|rule| !rule.ignore_authors.is_empty())
+    }
+
+    /// Check the `commit` by the `author`, given as `Name <email>`, or `None` if it is unknown,
+    /// with all rules that do not ignore it. The ignored rules are omitted from the results.
+    pub fn check_commit(
+        &self,
+        commit: &ConventionalCommit,
+        author: Option<&str>,
+    ) -> Vec<RuleResult> {
+        self.rules
+            .iter()
+            .filter(|rule| !rule.is_ignored(&commit.message, author))
+            .map(|rule| RuleResult {
+                rule_name: rule.rule.name().to_string(),
+                severity: rule.severity,
+                errors: rule.rule.check(commit),
             })
             .collect()
     }
@@ -75,7 +112,7 @@ mod tests {
             enabled: false
         "#;
         let rule_set = RuleSet::new(&parse_config(yaml).unwrap());
-        let names: Vec<&str> = rule_set.rules.iter().map(|(rule, _)| rule.name()).collect();
+        let names: Vec<&str> = rule_set.rules.iter().map(|rule| rule.rule.name()).collect();
         assert_eq!(
             names,
             vec![
@@ -100,7 +137,7 @@ mod tests {
     #[test]
     fn rule_names_are_the_config_keys() {
         let rule_set = RuleSet::new(&Config::default());
-        for (rule, _) in &rule_set.rules {
+        for rule in rule_set.rules.iter().map(|rule| &rule.rule) {
             let yaml = format!("rules: {{ {}: {{ enabled: false }} }}", rule.name());
             let config = parse_config(&yaml).unwrap();
 
@@ -108,7 +145,7 @@ mod tests {
                 RuleSet::new(&config)
                     .rules
                     .iter()
-                    .all(|(other, _)| other.name() != rule.name()),
+                    .all(|other| other.rule.name() != rule.name()),
                 "rule '{}' is not disabled by its config key",
                 rule.name()
             );
@@ -130,7 +167,7 @@ mod tests {
             parse_conventional_commit("feat: Add a feature.", &ParserConfig::default()).unwrap();
 
         let severities: Vec<(String, Severity, usize)> = rule_set
-            .check_commit(&commit)
+            .check_commit(&commit, None)
             .into_iter()
             .map(|result| (result.rule_name, result.severity, result.errors.len()))
             .collect();
@@ -159,5 +196,77 @@ mod tests {
                 ("type_case".to_string(), Severity::Error, 0),
             ]
         );
+    }
+
+    fn checked_rules(rule_set: &RuleSet, message: &str, author: Option<&str>) -> Vec<String> {
+        let commit = parse_conventional_commit(message, &ParserConfig::default()).unwrap();
+        rule_set
+            .check_commit(&commit, author)
+            .into_iter()
+            .map(|result| result.rule_name)
+            .collect()
+    }
+
+    #[test]
+    fn skips_only_the_rules_that_ignore_a_message() {
+        let yaml = r#"
+        rules:
+          required_footers:
+            tokens: [Signed-off-by]
+            ignores: ['^chore: Release$']
+        "#;
+        let rule_set = RuleSet::new(&parse_config(yaml).unwrap());
+        let all_rules = checked_rules(&rule_set, "feat: Add a feature", None);
+
+        let checked = checked_rules(&rule_set, "chore: Release\n", None);
+
+        assert!(all_rules.contains(&"required_footers".to_string()));
+        let expected: Vec<String> = all_rules
+            .into_iter()
+            .filter(|rule| rule != "required_footers")
+            .collect();
+        assert_eq!(checked, expected);
+    }
+
+    #[test]
+    fn skips_only_the_rules_that_ignore_an_author() {
+        let yaml = r#"
+        rules:
+          required_footers:
+            tokens: [Signed-off-by]
+            ignore_authors: ['^renovate\[bot\] ']
+          header_length:
+            ignore_authors: ['@example\.org>$']
+        "#;
+        let rule_set = RuleSet::new(&parse_config(yaml).unwrap());
+        let checks = |author| {
+            let rules = checked_rules(&rule_set, "chore: Update a dependency", author);
+            (
+                rules.contains(&"required_footers".to_string()),
+                rules.contains(&"header_length".to_string()),
+            )
+        };
+
+        assert!(rule_set.ignores_authors());
+        assert_eq!(
+            checks(Some("renovate[bot] <bot@renovateapp.com>")),
+            (false, true)
+        );
+        assert_eq!(checks(Some("Jane Doe <jane@example.org>")), (true, false));
+        assert_eq!(checks(Some("John Doe <john@example.com>")), (true, true));
+        assert_eq!(checks(None), (true, true));
+    }
+
+    #[test]
+    fn ignores_authors_only_if_an_enabled_rule_does() {
+        assert!(!RuleSet::new(&Config::default()).ignores_authors());
+
+        let yaml = r#"
+        rules:
+          header_length:
+            enabled: false
+            ignore_authors: ['^renovate\[bot\] ']
+        "#;
+        assert!(!RuleSet::new(&parse_config(yaml).unwrap()).ignores_authors());
     }
 }

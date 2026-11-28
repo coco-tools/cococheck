@@ -1,9 +1,10 @@
 use crate::parser::ParserConfig;
+use crate::pattern::{Patterns, matches_message};
 use crate::rules::{
     AllowedScopes, AllowedTypes, BlankLineBeforeFooter, BodyLength, BodyLineLength, BreakingChange,
     DescriptionCase, FooterLength, FooterLineLength, HeaderLength,
-    NoDescriptionTerminalPunctuation, NoTrailingWhitespace, RequiredFooters, RuleConfig, ScopeCase,
-    ScopePresence, TypeCase,
+    NoDescriptionTerminalPunctuation, NoTrailingWhitespace, RequiredFooters, RuleConfig, RuleSet,
+    ScopeCase, ScopePresence, TypeCase,
 };
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -124,21 +125,13 @@ impl Config {
     /// Return whether the commit `message` is ignored, because it matches one of the default ignore
     /// patterns, if they are enabled, or one of the configured `ignores`.
     pub fn is_ignored(&self, message: &str) -> bool {
-        // Git terminates the last line with a newline, but without the multi-line flag, `$` only
-        // matches at the very end of the message, so a pattern like `^Initial commit$` would never
-        // match.
-        let message = message.trim_end();
-
         let defaults: &[Regex] = if self.default_ignores {
             &DEFAULT_IGNORES
         } else {
             &[]
         };
 
-        defaults
-            .iter()
-            .chain(&self.ignores)
-            .any(|pattern| pattern.is_match(message))
+        matches_message(defaults.iter().chain(&self.ignores), message)
     }
 
     /// Return whether commits by the `author`, given as `Name <email>`, are ignored, because it
@@ -147,6 +140,12 @@ impl Config {
         self.ignore_authors
             .iter()
             .any(|pattern| pattern.is_match(author))
+    }
+
+    /// Return whether commits are ignored by their author, globally or by one of the enabled rules,
+    /// so that the author of a commit must be known to check it.
+    pub fn ignores_authors(&self) -> bool {
+        !self.ignore_authors.is_empty() || RuleSet::new(self).ignores_authors()
     }
 
     /// Serialize the configuration as YAML, with all settings, including the defaults of omitted
@@ -192,15 +191,10 @@ fn deserialize_patterns<'de, D>(deserializer: D, kind: &str) -> Result<Vec<Regex
 where
     D: Deserializer<'de>,
 {
-    Option::<Vec<String>>::deserialize(deserializer)?
-        .unwrap_or_default()
-        .iter()
-        .map(|pattern| {
-            Regex::new(pattern).map_err(|e| {
-                serde::de::Error::custom(format!("invalid {kind} pattern '{pattern}': {e}"))
-            })
-        })
-        .collect()
+    let patterns = Option::<Vec<String>>::deserialize(deserializer)?.unwrap_or_default();
+    Patterns::compile(&patterns, kind)
+        .map(|patterns| patterns.0)
+        .map_err(serde::de::Error::custom)
 }
 
 /// Serialize a list of regular expressions as a list of their patterns.
@@ -665,6 +659,7 @@ mod tests {
                     max_length: 100,
                     ignore_urls: true,
                 },
+                ..Default::default()
             }
         );
         assert_eq!(config.rules.header_length, RuleConfig::default());
@@ -754,6 +749,7 @@ mod tests {
                 rule: AllowedTypes {
                     types: vec!["feat".to_string(), "fix".to_string()]
                 },
+                ..Default::default()
             }
         );
         assert_eq!(
@@ -762,6 +758,7 @@ mod tests {
                 enabled: false,
                 severity: Severity::Error,
                 rule: NoDescriptionTerminalPunctuation::default(),
+                ..Default::default()
             }
         );
     }
@@ -782,6 +779,7 @@ mod tests {
                 rule: RequiredFooters {
                     tokens: vec!["Signed-off-by".to_string()]
                 },
+                ..Default::default()
             }
         );
     }
@@ -965,7 +963,8 @@ mod tests {
         let error = parse_config(yaml).unwrap_err().to_string();
         assert!(
             error.contains(
-                "unknown option `max_lenght`, expected one of `enabled`, `severity`, `max_length`"
+                "unknown option `max_lenght`, expected one of `enabled`, `severity`, `ignores`, \
+                 `ignore_authors`, `max_length`"
             ),
             "{error}"
         );
@@ -995,6 +994,63 @@ mod tests {
         assert!(!config.rules.header_length.enabled);
         assert_eq!(config.rules.header_length.severity, Severity::Warning);
         assert_eq!(config.rules.header_length.rule.max_length, 50);
+    }
+
+    #[test]
+    fn read_ignores_of_a_rule() {
+        let yaml = r#"
+        rules:
+          required_footers:
+            tokens: [Signed-off-by]
+            ignores: ['^chore: Release']
+            ignore_authors: ['^renovate\[bot\] ']
+          header_length:
+            ignores:
+        "#;
+        let config = parse_config(yaml).unwrap();
+        let required_footers = &config.rules.required_footers;
+        assert!(
+            required_footers
+                .ignores
+                .matches_message("chore: Release v1.0.0")
+        );
+        assert!(
+            !required_footers
+                .ignores
+                .matches_message("feat: Add a feature")
+        );
+        assert!(
+            required_footers
+                .ignore_authors
+                .matches_author("renovate[bot] <bot@renovateapp.com>")
+        );
+        assert!(config.rules.header_length.ignores.is_empty());
+        assert!(config.rules.header_length.ignore_authors.is_empty());
+        assert!(config.ignores.is_empty());
+    }
+
+    #[test]
+    fn fails_for_invalid_ignore_patterns_of_a_rule() {
+        for (option, kind) in [("ignores", "ignore"), ("ignore_authors", "ignore author")] {
+            let yaml = format!("rules:\n  header_length:\n    {option}: ['(unclosed']\n");
+            let message = parse_config(&yaml).unwrap_err().to_string();
+            assert!(
+                message.contains(&format!("invalid {kind} pattern '(unclosed'")),
+                "{message}"
+            );
+        }
+    }
+
+    #[test]
+    fn ignores_authors_if_the_config_or_a_rule_does() {
+        assert!(!Config::default().ignores_authors());
+        assert!(
+            parse_config("ignore_authors: ['bot']")
+                .unwrap()
+                .ignores_authors()
+        );
+        let yaml = "rules: { header_length: { ignore_authors: ['bot'] } }";
+        assert!(parse_config(yaml).unwrap().ignores_authors());
     }
 
     #[test]
@@ -1113,6 +1169,10 @@ mod tests {
             enabled: false
             severity: warning
             max_length: 100
+          required_footers:
+            tokens: [Signed-off-by]
+            ignores: ['^chore: Release( v\S+)?(\n|$)']
+            ignore_authors: ['^renovate\[bot\] ']
         "#;
         let config = parse_config(yaml).unwrap();
 
@@ -1137,5 +1197,6 @@ mod tests {
         assert_eq!(parsed.rules.allowed_scopes, config.rules.allowed_scopes);
         assert_eq!(parsed.rules.description_case, config.rules.description_case);
         assert_eq!(parsed.rules.header_length, config.rules.header_length);
+        assert_eq!(parsed.rules.required_footers, config.rules.required_footers);
     }
 }

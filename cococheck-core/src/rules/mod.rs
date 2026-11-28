@@ -1,4 +1,5 @@
 use crate::parser::ConventionalCommit;
+use crate::pattern::Patterns;
 use regex::regex;
 use serde::de::value::{MapAccessDeserializer, StringDeserializer};
 use serde::de::{DeserializeSeed, Error as _, MapAccess, Visitor};
@@ -28,15 +29,25 @@ pub enum Severity {
     Error,
 }
 
-/// The configuration of a rule: Whether it is enabled, its severity, and the rule with its own
-/// options, which are flattened into the same YAML mapping as the `enabled` flag.
+/// The configuration of a rule: Whether it is enabled, its severity, the rule with its own options,
+/// which are flattened into the same YAML mapping as the `enabled` flag, and the commits that the
+/// rule does not check.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct RuleConfig<R> {
     pub enabled: bool,
     pub severity: Severity,
     #[serde(flatten)]
     pub rule: R,
+    /// Regular expressions for the messages that the rule does not check, like the global
+    /// `ignores`.
+    pub ignores: Patterns,
+    /// Regular expressions for the authors of the commits that the rule does not check, like the
+    /// global `ignore_authors`.
+    pub ignore_authors: Patterns,
 }
+
+/// The options that all rules have, besides their own options.
+const COMMON_OPTIONS: &[&str] = &["enabled", "severity", "ignores", "ignore_authors"];
 
 fn default_enabled() -> bool {
     true
@@ -44,7 +55,7 @@ fn default_enabled() -> bool {
 
 /// Deserialize the configuration of a rule by hand, because serde ignores `deny_unknown_fields` for
 /// a flattened field: It would silently drop unknown keys, like a misspelled option of a rule.
-/// Instead, take `enabled` and `severity` from the mapping, pass the options of the rule to the rule,
+/// Instead, take the `COMMON_OPTIONS` from the mapping, pass the options of the rule to the rule,
 /// and reject all other keys.
 impl<'de, R: Deserialize<'de>> Deserialize<'de> for RuleConfig<R> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -63,12 +74,16 @@ impl<'de, R: Deserialize<'de>> Deserialize<'de> for RuleConfig<R> {
                     rule_options: struct_fields::<R>(),
                     enabled: None,
                     severity: None,
+                    ignores: None,
+                    ignore_authors: None,
                 };
                 let rule = R::deserialize(MapAccessDeserializer::new(&mut common))?;
                 Ok(RuleConfig {
                     enabled: common.enabled.unwrap_or_else(default_enabled),
                     severity: common.severity.unwrap_or_default(),
                     rule,
+                    ignores: common.ignores.unwrap_or_default(),
+                    ignore_authors: common.ignore_authors.unwrap_or_default(),
                 })
             }
         }
@@ -84,6 +99,18 @@ struct CommonOptions<A> {
     rule_options: &'static [&'static str],
     enabled: Option<bool>,
     severity: Option<Severity>,
+    ignores: Option<Patterns>,
+    ignore_authors: Option<Patterns>,
+}
+
+impl<'de, A: MapAccess<'de>> CommonOptions<A> {
+    /// Read the next value as a list of regular expressions, like the global `ignores`, and fail for
+    /// an invalid one, describing it as a pattern of the given `kind`. A null value is read as an
+    /// empty list.
+    fn next_patterns(&mut self, kind: &str) -> Result<Patterns, A::Error> {
+        let patterns: Option<Vec<String>> = self.map.next_value()?;
+        Patterns::compile(&patterns.unwrap_or_default(), kind).map_err(A::Error::custom)
+    }
 }
 
 impl<'de, A: MapAccess<'de>> MapAccess<'de> for &mut CommonOptions<A> {
@@ -97,11 +124,15 @@ impl<'de, A: MapAccess<'de>> MapAccess<'de> for &mut CommonOptions<A> {
             match key.as_str() {
                 "enabled" => self.enabled = Some(self.map.next_value()?),
                 "severity" => self.severity = Some(self.map.next_value()?),
+                "ignores" => self.ignores = Some(self.next_patterns("ignore")?),
+                "ignore_authors" => {
+                    self.ignore_authors = Some(self.next_patterns("ignore author")?);
+                }
                 _ if self.rule_options.contains(&key.as_str()) => {
                     return seed.deserialize(StringDeserializer::new(key)).map(Some);
                 }
                 _ => {
-                    let expected = ["enabled", "severity"]
+                    let expected = COMMON_OPTIONS
                         .iter()
                         .chain(self.rule_options)
                         .map(|option| format!("`{option}`"))
@@ -183,12 +214,14 @@ impl<R: Default> Default for RuleConfig<R> {
             enabled: default_enabled(),
             severity: Severity::default(),
             rule: R::default(),
+            ignores: Patterns::default(),
+            ignore_authors: Patterns::default(),
         }
     }
 }
 
 mod rule_set;
-pub use rule_set::{RuleResult, RuleSet};
+pub use rule_set::{EnabledRule, RuleResult, RuleSet};
 
 mod allowed_scopes;
 pub use allowed_scopes::AllowedScopes;
