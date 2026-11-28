@@ -36,7 +36,7 @@ default-members = [".", "cococheck-core"]
 resolver = "3"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version = "1.89"
 license = "Apache-2.0"
@@ -47,5 +47,5 @@ keywords = ["conventional-commits", "git", "cli", "commit-message", "linter"]
 categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
-cococheck-core = { path = "cococheck-core", version = "0.2.0" }
+cococheck-core = { path = "cococheck-core", version = "0.2.1" }
 git2 = "0.21.0"
