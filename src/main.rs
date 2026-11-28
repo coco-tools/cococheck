@@ -344,11 +344,11 @@ fn read_message_file(repo_path: &Path, path: &Path, config: &Config) -> anyhow::
     debug!("Cleaning up the commit message with {:?}.", cleanup);
 
     // Running Git is only necessary if the author is needed.
-    let author = if config.ignore_authors.is_empty() {
+    let author = if !config.ignores_authors() {
         None
     } else {
         author_ident(repo_path)
-            .inspect_err(|e| warn!("{e}, so the commit cannot be ignored by its author"))
+            .inspect_err(|e| warn!("{e}, so the commit is not ignored by its author"))
             .ok()
     };
 
@@ -389,8 +389,8 @@ struct Report<'a> {
     forbidden: Option<Forbidden>,
     /// The reason why the message could not be parsed, if it could not be parsed.
     parse_error: Option<ParseError>,
-    /// The results of all enabled rules. It is empty if the message is forbidden, ignored, or could
-    /// not be parsed.
+    /// The results of all enabled rules that do not ignore the commit. It is empty if the message is
+    /// forbidden, ignored, or could not be parsed.
     results: Vec<RuleResult>,
 }
 
@@ -459,7 +459,17 @@ impl<'a> Checker<'a> {
 
         debug!("{:#?}", parsed);
 
-        let results = self.rule_set.check_commit(&parsed);
+        let author = message.author.as_deref();
+        for rule in &self.rule_set.rules {
+            if rule.is_ignored(&message.text, author) {
+                info!(
+                    "Rule '{}' is ignored for {}.",
+                    rule.rule.name(),
+                    message.name
+                );
+            }
+        }
+        let results = self.rule_set.check_commit(&parsed, author);
         let has_violations = |severity| {
             results
                 .iter()
@@ -905,6 +915,72 @@ mod tests {
         assert_eq!(
             checker
                 .check(&message(Some("a1"), "Update dependency"))
+                .outcome,
+            Outcome::Failed
+        );
+    }
+
+    #[test]
+    fn rules_ignore_commits_by_message_and_author() {
+        let config = cococheck_core::config::parse_config(
+            r"
+            forbidden: ['\bWIP\b']
+            rules:
+              required_footers:
+                tokens: [Signed-off-by]
+                ignores: ['^chore: Release']
+                ignore_authors: ['^renovate\[bot\] ']
+            ",
+        )
+        .unwrap();
+        let checker = Checker::new(&config, false);
+        let by = |author: &str, text: &str| Message {
+            author: Some(author.to_string()),
+            ..message(Some("a1"), text)
+        };
+        let rules = |report: &Report| -> Vec<String> {
+            report
+                .results
+                .iter()
+                .map(|result| result.rule_name.clone())
+                .collect()
+        };
+
+        let release = message(Some("a1"), "chore: Release v1.0.0");
+        let release = checker.check(&release);
+        assert_eq!(release.outcome, Outcome::Passed);
+        assert!(!rules(&release).contains(&"required_footers".to_string()));
+        assert!(rules(&release).contains(&"header_length".to_string()));
+
+        let renovate = "renovate[bot] <bot@renovateapp.com>";
+        assert_eq!(
+            checker
+                .check(&by(renovate, "chore: Update a dependency"))
+                .outcome,
+            Outcome::Passed
+        );
+        // The other rules still check the commit.
+        assert_eq!(
+            checker.check(&by(renovate, "Update a dependency")).outcome,
+            Outcome::Failed
+        );
+        assert_eq!(
+            checker
+                .check(&by(renovate, "chore: Update a dependency."))
+                .outcome,
+            Outcome::Failed
+        );
+        // Forbidden patterns still apply.
+        assert_eq!(
+            checker.check(&by(renovate, "chore: WIP")).outcome,
+            Outcome::Failed
+        );
+        assert_eq!(
+            checker
+                .check(&by(
+                    "Jane Doe <jane@example.org>",
+                    "chore: Update a dependency"
+                ))
                 .outcome,
             Outcome::Failed
         );

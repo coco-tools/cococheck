@@ -24,67 +24,99 @@ rules:
     enabled: true
     severity: error
     scopes: []
+    ignores: []
+    ignore_authors: []
   allowed_types:
     enabled: true
     severity: error
     types: [build, chore, ci, deps, docs, feat, fix, perf, refactor, revert, style, test]
+    ignores: []
+    ignore_authors: []
   blank_line_before_footer:
     enabled: true
     severity: error
+    ignores: []
+    ignore_authors: []
   body_length:
     enabled: true
     severity: error
     max_length: null
     min_length: null
+    ignores: []
+    ignore_authors: []
   body_line_length:
     enabled: true
     severity: error
     max_length: 72
     ignore_urls: true
+    ignores: []
+    ignore_authors: []
   breaking_change:
     enabled: true
     severity: error
     footer_required: false
     marker_required: true
+    ignores: []
+    ignore_authors: []
   description_case:
     enabled: true
     severity: error
     case: any
+    ignores: []
+    ignore_authors: []
   footer_length:
     enabled: true
     severity: error
     max_length: null
+    ignores: []
+    ignore_authors: []
   footer_line_length:
     enabled: true
     severity: error
     max_length: null
     ignore_urls: true
+    ignores: []
+    ignore_authors: []
   header_length:
     enabled: true
     severity: error
     max_length: 72
+    ignores: []
+    ignore_authors: []
   no_description_terminal_punctuation:
     enabled: true
     severity: error
     characters: .!?
+    ignores: []
+    ignore_authors: []
   no_trailing_whitespace:
     enabled: true
     severity: error
+    ignores: []
+    ignore_authors: []
   required_footers:
     enabled: true
     severity: error
     tokens: []
+    ignores: []
+    ignore_authors: []
   scope_case:
     enabled: true
     severity: error
     case: lower
+    ignores: []
+    ignore_authors: []
   scope_presence:
     enabled: true
     severity: error
     scope: optional
+    ignores: []
+    ignore_authors: []
   type_case:
     enabled: true
     severity: error
+    ignores: []
+    ignore_authors: []
 ```
 
 ## Effective configuration
@@ -181,6 +213,9 @@ and the author of an amended commit are also respected.
 | `ignore_merge_commits` | Whether commits with more than one parent are ignored.    | `true`  |
 | `ignores`              | Regular expressions for further messages to ignore.       | `[]`    |
 | `ignore_authors`       | Regular expressions for the authors of commits to ignore. | `[]`    |
+
+These settings ignore a commit completely. To skip only some rules for a commit, but check it with
+all others, [ignore the commit for these rules](rules.md#ignoring-commits-for-a-rule) instead.
 
 ## Forbidden commits
 

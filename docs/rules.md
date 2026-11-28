@@ -25,6 +25,40 @@ in CI, pass `--deny-warnings` in CI. A commit with warnings then fails: It is re
 with an outcome of `failed` in the [JSON output](usage.md#json-output), and CoCoCheck exits with
 status `1`. The violations are still reported as warnings.
 
+## Ignoring commits for a rule
+
+Some commits cannot meet a single rule, but should still be checked by all others. For example,
+release tools and bots often create commits without a `Signed-off-by` footer. To skip a rule for
+such commits, add [regular expressions](https://docs.rs/regex/latest/regex/#syntax) to the
+`ignores` or `ignore_authors` setting of the rule:
+
+```yaml
+rules:
+  required_footers:
+    tokens: [Signed-off-by]
+    ignores:
+      # The commits of release pull requests.
+      - '^chore: Release v'
+    ignore_authors:
+      - '^renovate\[bot\] '
+```
+
+Every rule has these settings. They are matched like the
+[global settings of the same name](configuration.md#ignored-commits): `ignores` against the whole
+message without trailing whitespace, and `ignore_authors` against the author as `Name <email>`.
+The rule does not check a commit if any part of its message or author matches one of them, and the
+commit is not listed in the results of the rule in the
+[JSON output](usage.md#json-output). The commit still fails if it matches a
+[forbidden pattern](configuration.md#forbidden-commits) or cannot be parsed. To skip all rules for
+a commit, use the global settings instead.
+
+| Setting          | Description                                                                 | Default |
+|------------------|-----------------------------------------------------------------------------|---------|
+| `ignores`        | Regular expressions for the messages that the rule does not check.          | `[]`    |
+| `ignore_authors` | Regular expressions for the authors of the commits the rule does not check. | `[]`    |
+
+## Available rules
+
 The following rules are available:
 
 - [`allowed_scopes`](#allowed_scopes)

@@ -1,14 +1,12 @@
-ignores:
-  # The commit of the release pull request, which release-plz creates without a `Signed-off-by`
-  # footer. Keep in sync with `pr_name` in release-plz.toml.
-  - '^chore: Release( v\S+)?(\n|$)'
-
-ignore_authors:
-  # The commits of Renovate, which are created without a `Signed-off-by` footer.
-  - '^renovate\[bot\] '
-
 rules:
   description_case:
     case: sentence
   required_footers:
     tokens: [Signed-off-by]
+    ignores:
+      # The commit of the release pull request, which release-plz creates without a `Signed-off-by`
+      # footer. Keep in sync with `pr_name` in release-plz.toml.
+      - '^chore: Release( v\S+)?(\n|$)'
+    ignore_authors:
+      # The commits of Renovate, which are created without a `Signed-off-by` footer.
+      - '^renovate\[bot\] '
