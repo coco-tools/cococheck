@@ -26,6 +26,11 @@
       "matchManagers": ["github-actions"],
       "matchPackageNames": ["dtolnay/rust-toolchain"],
       "enabled": false
+    },
+    {
+      "description": "This action is maintained by the same organization as CoCoCheck, so its releases are adopted immediately instead of waiting for the minimum release age, which protects against broken or compromised releases of third parties.",
+      "matchPackageNames": ["coco-tools/cococheck-action"],
+      "minimumReleaseAge": "0 days"
     }
   ]
 }
