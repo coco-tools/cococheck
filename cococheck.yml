@@ -1,18 +1,14 @@
-# The ignores below only exist because the commits lack a `Signed-off-by` footer, so they should
-# only apply to `required_footers`. Move them to its `ignores` and `ignore_authors` once the
-# CoCoCheck version used in CI supports ignores for individual rules, which older versions reject
-# or silently drop.
-ignores:
-  # The commit of the release pull request, which release-plz creates without a `Signed-off-by`
-  # footer. Keep in sync with `pr_name` in release-plz.toml.
-  - '^chore: Release( v\S+)?(\n|$)'
-
-ignore_authors:
-  # The commits of Renovate, which are created without a `Signed-off-by` footer.
-  - '^renovate\[bot\] '
-
+# CI checks the commits with the CoCoCheck version of the action, not with the code of the branch,
+# so only use settings that this version supports.
 rules:
   description_case:
     case: sentence
   required_footers:
     tokens: [Signed-off-by]
+    ignores:
+      # The commit of the release pull request, which release-plz creates without a `Signed-off-by`
+      # footer. Keep in sync with `pr_name` in release-plz.toml.
+      - '^chore: Release( v\S+)?(\n|$)'
+    ignore_authors:
+      # The commits of Renovate, which are created without a `Signed-off-by` footer.
+      - '^renovate\[bot\] '
