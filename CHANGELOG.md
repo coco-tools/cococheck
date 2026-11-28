@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/coco-tools/cococheck/compare/v0.2.0...v0.2.1) - 2026-11-28
+
+### Added
+
+- Allow ignoring commits for individual rules
+
+### Updated dependencies
+
+- Update Rust crate env_logger to 0.11.12
+- Update Rust crate clap to 4.6.9
+
 ## [0.2.0](https://github.com/coco-tools/cococheck/compare/v0.1.0...v0.2.0) - 2026-11-25
 
 ### Added
